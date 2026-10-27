@@ -24,12 +24,25 @@ Um único comando compila e roda:
 ### Aplicação local
 
 ```bash
-docker compose up -d --wait   # PostgreSQL 16 (localhost:5432) + mock do provedor (localhost:8089)
+docker compose up -d --wait   # Postgres (5432) + mock do provedor (8089) + Keycloak de desenvolvimento (8180)
 ./mvnw spring-boot:run
 curl localhost:8080/actuator/health
 ```
 
 O schema é criado pelo Flyway na subida (`src/main/resources/db/migration`).
+
+Todas as chamadas em `/api/**` exigem um token. O Keycloak do compose já sobe com o realm `activation` (`docker/keycloak/activation-realm.json`) e três clientes:
+
+| Cliente | Segredo | Escopos |
+|---|---|---|
+| `sistema-a` | `sistema-a-secret` | `activation:read activation:write` |
+| `sistema-b` | `sistema-b-secret` | `activation:read activation:write` |
+| `sistema-leitura` | `sistema-leitura-secret` | `activation:read` |
+
+```bash
+TOKEN=$(curl -s -X POST localhost:8180/realms/activation/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=sistema-a -d client_secret=sistema-a-secret | jq -r .access_token)
+```
 
 O mock do provedor (WireMock, mappings em `docker/wiremock/`) escolhe a resposta pelo `productCode`. Isso permite ver cada caminho da integração:
 
@@ -41,9 +54,10 @@ O mock do provedor (WireMock, mappings em `docker/wiremock/`) escolhe a resposta
 | qualquer outro (ex.: `INTERNET-500`) | 200 | `COMPLETED` |
 
 ```bash
-id=$(curl -s -X POST localhost:8080/api/v1/requests -H 'Content-Type: application/json' \
+id=$(curl -s -X POST localhost:8080/api/v1/requests -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
   -d '{"externalId":"EXT-1","customerId":"CUST-1","productCode":"INTERNET-500"}' | jq -r .id)
-sleep 3 && curl -s localhost:8080/api/v1/requests/$id   # status: COMPLETED
+sleep 3 && curl -s localhost:8080/api/v1/requests/$id -H "Authorization: Bearer $TOKEN"   # status: COMPLETED
 ```
 
 ### Configuração
@@ -61,13 +75,19 @@ sleep 3 && curl -s localhost:8080/api/v1/requests/$id   # status: COMPLETED
 | `WORKER_ENABLED` | `true` | Liga o envio assíncrono e a reconciliação |
 | `WORKER_POLL_INTERVAL` | `2s` | Intervalo entre buscas de solicitações pendentes |
 | `WORKER_RECONCILE_INTERVAL` | `1m` | Intervalo da reconciliação de solicitações presas em `PROCESSING` |
+| `OAUTH_ISSUER` | `http://localhost:8180/realms/activation` | Emissor esperado no claim `iss` |
+| `OAUTH_JWK_SET_URI` | `.../realms/activation/protocol/openid-connect/certs` | Onde buscar as chaves públicas (JWKS) |
+| `OAUTH_AUDIENCE` | `activation-service` | Valor exigido no claim `aud` |
 
 ## API
 
 ### `POST /api/v1/requests`
 
+Escopo exigido: `activation:write`.
+
 ```bash
 curl -i -X POST localhost:8080/api/v1/requests \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"externalId":"EXT-12345","customerId":"CUST-10001","productCode":"INTERNET-500"}'
 ```
@@ -93,7 +113,7 @@ Datas em UTC, ISO-8601, com precisão de milissegundos.
 
 ### `GET /api/v1/requests/{id}`
 
-Retorna a solicitação e o status atual. Responde `404` se não existir e `400` se o id não for um UUID.
+Escopo exigido: `activation:read`. Retorna a solicitação e o status atual. Responde `404` se ela não existir **ou pertencer a outro cliente**, e `400` se o id não for um UUID.
 
 ### Erros
 
@@ -115,7 +135,10 @@ Todas as respostas de erro usam [Problem Details (RFC 9457)](https://www.rfc-edi
 |---|---|---|
 | Campo inválido / id malformado | 400 | `validation-error` |
 | JSON malformado | 400 | `malformed-request` |
-| Solicitação inexistente | 404 | `not-found` |
+| Token ausente, expirado ou inválido | 401 (com `WWW-Authenticate: Bearer`) | `unauthorized` |
+| Token sem o escopo necessário | 403 | `forbidden` |
+| Solicitação inexistente ou de outro cliente | 404 | `not-found` |
+| Corpo acima de 16 KB | 413 | `payload-too-large` |
 | `externalId` repetido com conteúdo diferente | 409 | `duplicate-request` |
 | Atualização concorrente detectada | 409 | `concurrent-update` |
 | Erro inesperado (detalhes só no log) | 500 | `internal-error` |
@@ -141,6 +164,33 @@ A garantia vem de uma **constraint `UNIQUE (external_id)` no PostgreSQL**:
 | Duas requisições idênticas em paralelo | Uma `201`, a outra `200` | O banco bloqueia o segundo insert até o primeiro commitar, e então ele cai no caso de retry. |
 
 Coberto por `ConcurrentCreationIT`: 10 threads simultâneas contra Postgres real (Testcontainers) resultam em exatamente 1 registro, 1 criação e 9 respostas "existente".
+
+### Segurança (item 7) — [ADR 0008](docs/adr/0008-seguranca-oauth2-resource-server.md)
+
+Implementada com Spring Security como **OAuth 2.0 Resource Server**. O serviço não emite tokens; ele só os valida.
+
+**Fluxo: Client Credentials.** Quem consome a API são outros sistemas, sem usuário nem navegador. Cada sistema tem um `client_id` e um segredo (ou chave privada, com `private_key_jwt`) no servidor de autorização corporativo (Keycloak, Entra ID, Cognito...), troca essas credenciais por um access token de vida curta (5 min no realm local) e o envia como `Authorization: Bearer`.
+
+**O que é validado em cada token:**
+
+| Verificação | Como |
+|---|---|
+| Assinatura | Chaves públicas buscadas no JWKS do emissor (`OAUTH_JWK_SET_URI`), mantidas em cache e renovadas quando aparece um `kid` novo. Isso permite rotacionar as chaves do emissor sem redeploy. |
+| Emissor (`iss`) | Igual a `OAUTH_ISSUER`. |
+| Audiência (`aud`) | Contém `activation-service`. Impede reaproveitar aqui um token emitido para outro serviço. |
+| Validade (`exp`, `nbf`) | Com tolerância de 30 s para diferença de relógio entre máquinas. |
+
+**Autorização por escopo:** `activation:write` para criar e `activation:read` para consultar. Sem token, a resposta é `401`; com token sem o escopo, `403`. Os probes `/actuator/health/liveness` e `/readiness` são públicos (o orquestrador não tem token) e não expõem detalhes de componentes.
+
+**Isolamento entre consumidores (OWASP API1:2023, BOLA).** Cada solicitação grava o cliente que a criou (claim `azp` do token). As consultas sempre filtram por ele, e a solicitação de outro cliente responde **`404`, não `403`**, para não confirmar que o id existe. Pelo mesmo motivo, a unicidade de `externalId` passou a ser **por cliente** (`UNIQUE (client_id, external_id)`). Com unicidade global, o sistema B enviando um `externalId` do sistema A receberia os dados de A no `200` de retry, ou um `409` revelando que aquele id existe.
+
+**Credencial do provedor externo.** `PROVIDER_API_KEY` vem por variável de ambiente, injetada em produção a partir de um cofre (AWS Secrets Manager, Azure Key Vault, HashiCorp Vault), e nunca é versionada nem logada. A rotação usa duas credenciais válidas em paralelo durante a janela de troca: o cofre publica a nova, as instâncias passam a usá-la (restart gradual ou recarga via Spring Cloud Vault/AWS) e só então a antiga é revogada no provedor.
+
+**Limites.** O corpo da requisição tem no máximo 16 KB (`413` acima disso, inclusive para corpos *chunked*), e cada campo tem tamanho máximo. **O rate limit por cliente fica no API Gateway**, não na aplicação: com N réplicas, um limite em memória por instância não garante nada, e o gateway já conhece o `client_id`.
+
+**Testes sem servidor de autorização:**
+- os testes de controller usam o `jwt()` do `spring-security-test`;
+- o `SecurityIT` assina tokens com uma chave RSA gerada no teste e publica o JWKS no WireMock, exercitando o decoder real com token expirado, dentro da tolerância de relógio, audiência errada, emissor errado, chave desconhecida, escopo insuficiente e acesso entre clientes.
 
 ### Status da solicitação — [ADR 0004](docs/adr/0004-maquina-de-estados-no-dominio.md)
 
@@ -183,3 +233,5 @@ Backoff: `min(5 min, 2 s × 2^(n−1))` multiplicado por um fator aleatório ent
 - **Log de duplicidade em nível ERROR**: no retry legítimo, o `SqlExceptionHelper` do Hibernate registra `duplicate key` como ERROR antes de o serviço tratar a violação. Em produção, isso polui o log e pode disparar alertas. As opções são rebaixar esse logger específico ou trocar o insert por `INSERT ... ON CONFLICT DO NOTHING RETURNING` (ADR 0003).
 - **Reprocessamento manual de `FAILED`**: não há endpoint administrativo para reenfileirar uma solicitação `FAILED` (por exemplo, depois de corrigir a credencial que causou um 401). Hoje, isso exigiria um `UPDATE` direto no banco.
 - **Circuit breaker no cliente do provedor**: descrito na seção de integração, mas não implementado.
+- **Rate limit por cliente**: delegado ao API Gateway (seção Segurança), não implementado na aplicação.
+- **Autenticação do serviço perante o provedor**: hoje é uma API key estática (`X-Api-Key`). Se o provedor suportar, o ideal é o mesmo modelo Client Credentials, ou mTLS.

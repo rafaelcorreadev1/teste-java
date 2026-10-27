@@ -25,11 +25,11 @@ A API está aberta, e a unicidade é global por `external_id`. O worker do prove
   - `/actuator/health/**` é `permitAll`;
   - o restante é `authenticated`.
 - O Spring converte a claim `scope`/`scp` em `SCOPE_*` automaticamente. Se o emissor (ex.: Keycloak/Entra) usar outra claim, ajusta-se no `JwtAuthenticationConverter`.
-- `JwtDecoder` via `issuer-uri`, que descobre o `jwks_uri` pelo OpenID discovery e faz cache e rotação por `kid`. Os validadores somam o padrão (`iss`, `exp`, `nbf` com skew de 30 s) e um `JwtClaimValidator` de `aud`.
+- `JwtDecoder` montado com `NimbusJwtDecoder.withJwkSetUri` (cache e rotação por `kid`) e três validadores explícitos: timestamp com skew de 30 s, issuer e um `JwtClaimValidator` de `aud`. A descoberta via `issuer-uri` foi descartada para que a subida não dependa do emissor estar no ar.
 - `AuthenticationEntryPoint` e `AccessDeniedHandler` escrevem `ProblemDetail` (`unauthorized` e `forbidden`), para manter o contrato de erro do ADR 0005.
 
 ### Identidade do consumidor
-- `ClientIdResolver` extrai `azp`, ou `client_id` como alternativa, do `Jwt`. O controller recebe `@AuthenticationPrincipal Jwt` e passa o `clientId` ao serviço. O domínio não conhece Spring Security.
+- `ConsumerIdentity` extrai `azp` (ou `client_id`, ou `sub`) do `Jwt`. O controller recebe `@AuthenticationPrincipal Jwt` e passa o `clientId` ao serviço. O domínio não conhece Spring Security.
 - O repositório passa a ter `findByIdAndClientId` e `findByClientIdAndExternalId`. Não existe método que busque só por `id` para uso da API, o que torna a falha BOLA difícil de reintroduzir por engano.
 
 ### Migration V3
@@ -49,14 +49,14 @@ O tratamento de duplicidade passa a reconhecer o novo nome de constraint.
 
 ### Testes
 - `@WebMvcTest` com `jwt().authorities(new SimpleGrantedAuthority("SCOPE_activation:read")).jwt(j -> j.claim("azp", "sys-a"))`.
-- Para exercitar o `JwtDecoder` real (aud/exp), um teste de integração gera um par RSA local e expõe o JWKS pelo WireMock com `issuer-uri` apontando para ele.
+- Para exercitar o `JwtDecoder` real, `SecurityIT` gera um par RSA local, publica o JWKS no WireMock (já compartilhado pelo contexto de integração) e assina tokens com claims variados.
 
 ## Risks / Trade-offs
 
 - [Mudança incompatível na unicidade] → A unicidade fica mais permissiva (por cliente), então nenhum cliente existente passa a receber erro novo. As linhas antigas recebem `client_id = 'legacy'`.
-- [A claim do client id varia por emissor] → É configurável por propriedade (`activation.security.client-id-claim`, padrão `azp`).
+- [O claim do client id varia por emissor] → `ConsumerIdentity` tenta `azp`, depois `client_id` e por fim `sub`. Uma propriedade só seria necessária para um emissor fora desse padrão.
 - [Retornar 404 em BOLA dificulta o debug do consumidor] → O log do servidor registra `clientId` e `requestId` em `debug` para o suporte.
 
 ## Migration Plan
 
-Aplicar o V3 com a aplicação nova. Os consumidores precisam obter credenciais Client Credentials antes do deploy. É possível uma janela com `activation.security.enabled=false` atrás do gateway, mas isso não é recomendado.
+Aplicar o V3 com a aplicação nova. Os consumidores precisam obter credenciais Client Credentials antes do deploy.
