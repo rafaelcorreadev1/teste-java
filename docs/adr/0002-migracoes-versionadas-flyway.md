@@ -1,6 +1,6 @@
 # 0002. Versionar o schema com Flyway
 
-- Status: Proposto
+- Status: Aceito
 - Data: 2026-10-27
 - Change: `bootstrap-project`
 

@@ -17,7 +17,7 @@ O repositório está vazio. Na máquina de desenvolvimento há Docker, mas ainda
 
 ## Decisions
 
-- **Stack e banco real nos testes**: ver [ADR 0001](../../../docs/adr/0001-stack-java21-spring-boot3.md). A versão do Spring Boot é a 3.5.x mais recente disponível no Spring Initializr no momento do bootstrap.
+- **Stack e banco real nos testes**: ver [ADR 0001](../../../docs/adr/0001-stack-java21-spring-boot3.md). Versão fixada em 3.5.16, a última da linha 3.x. O Initializr já não oferece a 3.5, então o `pom.xml` foi escrito à mão e só o Maven Wrapper veio de um projeto gerado.
 - **Flyway + `ddl-auto=validate`**: ver [ADR 0002](../../../docs/adr/0002-migracoes-versionadas-flyway.md).
 - **Testcontainers com `@ServiceConnection`** (Spring Boot 3.1+): o Spring configura o datasource a partir do container, sem `@DynamicPropertySource` manual. O container é estático e compartilhado entre as classes de teste (*singleton container*) para não subir um Postgres por classe.
 - **Surefire para unitários (`*Test`) e Failsafe para integração (`*IT`)**: `verify` roda os dois e deixa clara a separação na estratégia de testes.

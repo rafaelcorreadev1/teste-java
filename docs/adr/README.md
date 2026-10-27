@@ -5,8 +5,8 @@ Um ADR **Aceito** não é editado. Para mudar a decisão, crie um ADR novo que o
 
 | ADR | Decisão | Status | Change OpenSpec |
 |---|---|---|---|
-| [0001](0001-stack-java21-spring-boot3.md) | Java 21 + Spring Boot 3.5 + Maven + PostgreSQL | Proposto | `bootstrap-project` |
-| [0002](0002-migracoes-versionadas-flyway.md) | Schema versionado com Flyway | Proposto | `bootstrap-project` |
+| [0001](0001-stack-java21-spring-boot3.md) | Java 21 + Spring Boot 3.5.16 + Maven + PostgreSQL | Aceito | `bootstrap-project` |
+| [0002](0002-migracoes-versionadas-flyway.md) | Schema versionado com Flyway | Aceito | `bootstrap-project` |
 | [0003](0003-unicidade-externalid-constraint-banco.md) | Unicidade de `externalId` por constraint no banco + semântica de retry | Proposto | `add-activation-requests` |
 | [0004](0004-maquina-de-estados-no-dominio.md) | Transições de status no domínio + lock otimista | Proposto | `add-activation-requests` |
 | [0005](0005-erros-problem-details.md) | Erros em Problem Details (RFC 9457) com `traceId` | Proposto | `add-activation-requests` |
