@@ -13,6 +13,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.web.client.RestClient;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 
 /** Garante que os mappings usados no docker-compose produzem o comportamento documentado no README. */
@@ -29,7 +31,7 @@ class ProviderMockMappingsTest {
     void setUp() {
         ProviderProperties properties = new ProviderProperties(
                 composeMock.baseUrl(), "k", Duration.ofSeconds(1), Duration.ofMillis(500));
-        client = new ProviderClient(properties, RestClient.builder(), Clock.systemUTC());
+        client = new ProviderClient(properties, RestClient.builder(), Clock.systemUTC(), new SimpleMeterRegistry());
     }
 
     @ParameterizedTest

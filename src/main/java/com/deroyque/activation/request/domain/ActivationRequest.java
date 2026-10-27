@@ -47,6 +47,9 @@ public class ActivationRequest {
     @Column(name = "failure_reason")
     private String failureReason;
 
+    @Column(name = "correlation_id", updatable = false)
+    private String correlationId;
+
     @Version
     private Long version;
 
@@ -100,6 +103,11 @@ public class ActivationRequest {
         processingStartedAt = null;
     }
 
+    /** Liga o processamento assíncrono à requisição HTTP que criou a solicitação. */
+    public void traceWith(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
     public boolean hasSameContentAs(String customerId, String productCode) {
         return this.customerId.equals(customerId) && this.productCode.equals(productCode);
     }
@@ -150,6 +158,10 @@ public class ActivationRequest {
 
     public String getFailureReason() {
         return failureReason;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
     }
 
     public Long getVersion() {

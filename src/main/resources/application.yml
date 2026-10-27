@@ -16,12 +16,33 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  lifecycle:
+    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:30s}
+  task:
+    scheduling:
+      shutdown:
+        await-termination: true
+        await-termination-period: ${SHUTDOWN_TIMEOUT:30s}
 
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
         enabled: true
+      show-details: when-authorized
+      group:
+        readiness:
+          include: readinessState,db
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
 
 activation:
   security:
@@ -51,6 +72,7 @@ logging:
 
 server:
   port: ${SERVER_PORT:8080}
+  shutdown: graceful
   error:
     include-stacktrace: never
     include-message: never

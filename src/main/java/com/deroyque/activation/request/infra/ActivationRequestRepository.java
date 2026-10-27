@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
 import com.deroyque.activation.request.domain.ActivationRequest;
+import com.deroyque.activation.request.domain.ActivationStatus;
 
 public interface ActivationRequestRepository
         extends JpaRepository<ActivationRequest, UUID>, JpaSpecificationExecutor<ActivationRequest> {
@@ -36,4 +37,13 @@ public interface ActivationRequestRepository
                and r.processingStartedAt < :threshold
             """)
     List<UUID> findStuckProcessingIds(Instant threshold);
+
+    @Query("select r.status as status, count(r) as total from ActivationRequest r group by r.status")
+    List<StatusCount> countByStatus();
+
+    interface StatusCount {
+        ActivationStatus getStatus();
+
+        long getTotal();
+    }
 }

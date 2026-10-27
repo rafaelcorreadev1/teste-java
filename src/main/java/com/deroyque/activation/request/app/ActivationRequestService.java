@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -16,6 +17,7 @@ import com.deroyque.activation.request.domain.ActivationStatus;
 import com.deroyque.activation.request.infra.ActivationRequestSpecifications;
 import com.deroyque.activation.request.infra.ActivationRequestRepository;
 import com.deroyque.activation.shared.persistence.ConstraintViolations;
+import com.deroyque.activation.shared.web.CorrelationIdFilter;
 
 @Service
 public class ActivationRequestService {
@@ -42,6 +44,7 @@ public class ActivationRequestService {
     public CreateResult create(NewActivationRequest command) {
         ActivationRequest request = ActivationRequest.create(command.clientId(),
                 command.externalId(), command.customerId(), command.productCode(), clock.instant());
+        request.traceWith(MDC.get(CorrelationIdFilter.MDC_KEY));
         try {
             return new CreateResult.Created(writer.insert(request));
         } catch (DataIntegrityViolationException e) {

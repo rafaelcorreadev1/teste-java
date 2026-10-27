@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.web.client.RestClient;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 
 class ProviderClientTest {
@@ -39,7 +41,7 @@ class ProviderClientTest {
         ProviderProperties properties = new ProviderProperties(
                 provider.baseUrl(), "secret-key", Duration.ofSeconds(1), Duration.ofMillis(500));
         client = new ProviderClient(properties, RestClient.builder(),
-                Clock.fixed(Instant.parse("2026-10-27T12:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-10-27T12:00:00Z"), ZoneOffset.UTC), new SimpleMeterRegistry());
     }
 
     @Test
@@ -98,7 +100,7 @@ class ProviderClientTest {
     void connectionRefusedIsTransient() {
         ProviderProperties unreachable = new ProviderProperties(
                 "http://localhost:1", "k", Duration.ofMillis(300), Duration.ofMillis(300));
-        ProviderClient offline = new ProviderClient(unreachable, RestClient.builder(), Clock.systemUTC());
+        ProviderClient offline = new ProviderClient(unreachable, RestClient.builder(), Clock.systemUTC(), new SimpleMeterRegistry());
 
         assertThat(offline.activate(COMMAND, "corr-1")).isEqualTo(ProviderResult.TransientFailure.of("PROVIDER_UNREACHABLE"));
     }

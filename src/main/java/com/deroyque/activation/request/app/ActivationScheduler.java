@@ -9,9 +9,16 @@ import org.springframework.stereotype.Component;
 class ActivationScheduler {
 
     private final ActivationDispatcher dispatcher;
+    private final ActivationStatusMetrics statusMetrics;
 
-    ActivationScheduler(ActivationDispatcher dispatcher) {
+    ActivationScheduler(ActivationDispatcher dispatcher, ActivationStatusMetrics statusMetrics) {
         this.dispatcher = dispatcher;
+        this.statusMetrics = statusMetrics;
+    }
+
+    @Scheduled(fixedDelayString = "${activation.worker.metrics-interval:30s}")
+    void refreshMetrics() {
+        statusMetrics.refresh();
     }
 
     @Scheduled(fixedDelayString = "${activation.worker.poll-interval}")

@@ -5,6 +5,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -22,6 +23,7 @@ import org.springframework.context.annotation.Import;
         "activation.security.issuer=" + TestTokenIssuer.ISSUER
 })
 @AutoConfigureMockMvc
+@AutoConfigureObservability
 @Import({TestcontainersConfiguration.class, ProviderMockConfiguration.class, DatabaseCleaner.class})
 public @interface IntegrationTest {
 }

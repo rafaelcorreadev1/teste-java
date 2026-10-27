@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import com.deroyque.activation.provider.ProviderClient;
 import com.deroyque.activation.provider.ProviderResult;
 import com.deroyque.activation.request.infra.ActivationRequestRepository;
+import com.deroyque.activation.shared.web.CorrelationIdFilter;
 
 /**
  * Envia ao provedor as solicitações pendentes. A chamada HTTP acontece fora de qualquer
@@ -64,10 +65,11 @@ public class ActivationDispatcher {
 
     private void process(ClaimedRequest request) {
         MDC.put("requestId", request.id().toString());
+        MDC.put(CorrelationIdFilter.MDC_KEY, request.correlationId());
         try {
             ProviderResult result = providerClient.activate(
                     new ProviderClient.ActivationCommand(request.id(), request.customerId(), request.productCode()),
-                    request.id().toString());
+                    request.correlationId());
             stateStore.applyResult(request.id(), result, clock.instant());
             log.info("Solicitação {} tentativa {}: {}", request.id(), request.attempt(), result);
         } catch (OptimisticLockingFailureException e) {
@@ -77,6 +79,7 @@ public class ActivationDispatcher {
             log.error("Falha inesperada ao processar a solicitação {}", request.id(), e);
         } finally {
             MDC.remove("requestId");
+            MDC.remove(CorrelationIdFilter.MDC_KEY);
         }
     }
 }

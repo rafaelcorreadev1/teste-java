@@ -4,6 +4,9 @@ import java.net.http.HttpClient;
 import java.time.Clock;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -24,8 +27,9 @@ public class ProviderClient {
 
     private final RestClient restClient;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
 
-    ProviderClient(ProviderProperties properties, RestClient.Builder builder, Clock clock) {
+    ProviderClient(ProviderProperties properties, RestClient.Builder builder, Clock clock, MeterRegistry meterRegistry) {
         // O padrão do JDK tenta upgrade h2c em HTTP puro, que vários servidores (inclusive o WireMock) abortam.
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
@@ -40,9 +44,22 @@ public class ProviderClient {
                 .defaultHeader("X-Api-Key", properties.apiKey())
                 .build();
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
     }
 
     public ProviderResult activate(ActivationCommand command, String correlationId) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        ProviderResult result = call(command, correlationId);
+        sample.stop(Timer.builder("activation.provider.call")
+                .description("Latência e resultado das chamadas ao provedor de ativação")
+                .tag("outcome", outcomeOf(result))
+                .tag("detail", detailOf(result))
+                .publishPercentileHistogram()
+                .register(meterRegistry));
+        return result;
+    }
+
+    private ProviderResult call(ActivationCommand command, String correlationId) {
         try {
             return restClient.post()
                     .uri(ACTIVATE_PATH)
@@ -58,6 +75,22 @@ public class ProviderClient {
             log.warn("Falha de comunicação com o provedor para a solicitação {}: {}", command.requestId(), e.getMessage());
             return ProviderResult.TransientFailure.of("PROVIDER_UNREACHABLE");
         }
+    }
+
+    private static String outcomeOf(ProviderResult result) {
+        return switch (result) {
+            case ProviderResult.Success success -> "success";
+            case ProviderResult.PermanentFailure failure -> "permanent_failure";
+            case ProviderResult.TransientFailure failure -> "transient_failure";
+        };
+    }
+
+    private static String detailOf(ProviderResult result) {
+        return switch (result) {
+            case ProviderResult.Success success -> "ok";
+            case ProviderResult.PermanentFailure failure -> "http_" + failure.httpStatus();
+            case ProviderResult.TransientFailure failure -> failure.reason().toLowerCase();
+        };
     }
 
     public record ActivationCommand(UUID requestId, String customerId, String productCode) {
