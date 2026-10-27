@@ -1,6 +1,6 @@
 # 0006. Processar a ativação de forma assíncrona, usando a própria tabela como outbox
 
-- Status: Proposto
+- Status: Aceito
 - Data: 2026-10-27
 - Change: `add-provider-activation`
 
@@ -17,7 +17,8 @@ O provedor externo pode ficar lento (o cenário de análise mostra 400 ms → 3 
   1. **Reivindica** um lote numa transação curta: `SELECT ... WHERE status = 'PENDING' AND next_attempt_at <= now() ORDER BY next_attempt_at LIMIT :n FOR UPDATE SKIP LOCKED`, e muda as linhas para `PROCESSING` com `processing_started_at = now()`. Com `SKIP LOCKED`, várias instâncias dividem o trabalho sem pegar a mesma linha.
   2. Chama o provedor **fora** da transação.
   3. Grava o resultado em outra transação curta (ADR 0007).
-- **Reconciliação**: linhas em `PROCESSING` há mais tempo que um *lease* configurável (5 min) voltam para `PENDING`. Isso cobre a instância que caiu no meio do envio, e o reenvio é seguro por causa da chave de idempotência (ADR 0007).
+- **Reconciliação**: linhas em `PROCESSING` há mais tempo que um *lease* configurável (5 min) voltam para `PENDING`. Isso cobre a instância que caiu no meio do envio, e o reenvio é seguro por causa da chave de idempotência (ADR 0007). Se a solicitação presa já esgotou as tentativas, ela vai para `FAILED` (`MAX_ATTEMPTS_EXCEEDED`), para que uma instância que cai sempre no mesmo ponto não gere reenvio infinito.
+- **Resultado obsoleto**: antes de gravar o resultado, o worker confere se a linha ainda está em `PROCESSING`. Se a reconciliação já a devolveu para `PENDING`, o resultado é descartado, e o próximo envio (com a mesma chave de idempotência) resolve. Conflitos de `@Version` entre worker e reconciliação também são descartados com log, sem erro.
 
 ## Alternativas consideradas
 - **Síncrono**: o cliente veria o resultado na hora, mas herdaria toda a lentidão do provedor e o risco de perda descrito acima.

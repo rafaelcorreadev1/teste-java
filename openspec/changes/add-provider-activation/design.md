@@ -56,12 +56,12 @@ create index ix_activation_request_processing on activation_request (processing_
 
 O lote é processado sequencialmente por execução (`batchSize` padrão 10). O paralelismo vem de múltiplas instâncias. Paralelizar dentro da instância com virtual threads é uma evolução simples, mas não necessária.
 
-**Reconciliação**: `@Scheduled` separado, com `UPDATE ... SET status='PENDING', next_attempt_at=now() WHERE status='PROCESSING' AND processing_started_at < now() - :lease` (via JPQL `@Modifying` e `version = version + 1`, para invalidar quem ainda segurava a versão antiga).
+**Reconciliação**: `@Scheduled` separado. Busca os ids em `PROCESSING` com `processing_started_at` anterior ao lease e libera cada um numa transação própria, chamando `returnToPending` na entidade. Um `UPDATE` em massa contornaria as transições do domínio (ADR 0004), e uma transação por linha faz com que um conflito de `@Version` (worker terminando ao mesmo tempo) afete só aquela linha. Se a tentativa já era a última, a solicitação vai para `FAILED` (`MAX_ATTEMPTS_EXCEEDED`). O `applyResult` ignora um resultado quando a linha não está mais em `PROCESSING`.
 
 ### Classificação, retentativa e idempotência (ver [ADR 0007](../../../docs/adr/0007-politica-de-retentativa-e-idempotencia-provedor.md))
 
 - `ProviderResult` é um `sealed interface` com os records `Success`, `PermanentFailure(int status)` e `TransientFailure(String reason, Duration retryAfter)`.
-- `ProviderClient` usa `RestClient` com `JdkClientHttpRequestFactory` (`connectTimeout` no `HttpClient` e `readTimeout` na factory) e um `defaultStatusHandler` que **não lança exceção**. O status é classificado em um método puro (`ProviderResponseClassifier`). `ResourceAccessException` (timeout, conexão recusada) vira `TransientFailure`.
+- `ProviderClient` usa `RestClient` com `JdkClientHttpRequestFactory` (`connectTimeout` no `HttpClient`, fixado em HTTP/1.1 para evitar o upgrade h2c, e `readTimeout` na factory) e `exchange(...)`, que entrega a resposta crua e **não lança exceção** por status. O status é classificado em um método puro (`ProviderResponseClassifier`). `ResourceAccessException` (timeout, conexão recusada) vira `TransientFailure`.
 - `RetryPolicy.nextAttemptAt(attempts, retryAfter)` é uma função pura com `Clock` e `RandomGenerator` injetados: `min(cap, base·2^(n−1)) · U(0.5,1.0)` ou `max(retryAfter, isso)`, limitado a `cap`.
 - A credencial do provedor vem de `activation.provider.api-key` (env `PROVIDER_API_KEY`) e nunca é logada.
 

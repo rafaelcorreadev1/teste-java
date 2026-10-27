@@ -1,6 +1,6 @@
 # 0007. Definir a política de retentativa e enviar chave de idempotência ao provedor
 
-- Status: Proposto
+- Status: Aceito
 - Data: 2026-10-27
 - Change: `add-provider-activation`
 
@@ -10,7 +10,7 @@ Nem toda falha merece retry. O caso difícil é o **timeout**, que é ambíguo: 
 ## Decisão
 **Chave de idempotência.** Toda chamada envia `Idempotency-Key: <id da solicitação>`. A chave é a mesma em todas as tentativas, então um provedor que a respeite devolve o resultado da primeira execução em vez de ativar de novo. O `X-Correlation-Id` também é propagado.
 
-**Timeouts explícitos e configuráveis.** Conexão de 2 s e leitura de 5 s (`activation.provider.connect-timeout` / `read-timeout`).
+**Timeouts explícitos e configuráveis.** Conexão de 2 s e leitura de 5 s (`activation.provider.connect-timeout` / `read-timeout`). O cliente usa o `HttpClient` do JDK fixado em HTTP/1.1, porque o padrão tenta o upgrade h2c em HTTP puro, e vários servidores (inclusive o WireMock) abortam a requisição.
 
 **Classificação da resposta**, modelada como `sealed interface ProviderResult permits Success, PermanentFailure, TransientFailure`:
 
@@ -19,6 +19,7 @@ Nem toda falha merece retry. O caso difícil é o **timeout**, que é ambíguo: 
 | 2xx | `COMPLETED` | Não | Ativado. |
 | 400 / 422 | `FAILED` | Não | Dados inválidos para o provedor; repetir dá o mesmo resultado. |
 | Outros 4xx (401, 403, 404) | `FAILED` | Não | Erro de configuração ou contrato que exige intervenção. Gera log de erro e métrica. |
+| 408 | `PENDING` | Sim, com backoff | Timeout do lado do provedor. |
 | 429 / 503 com `Retry-After` | `PENDING` | Sim, após o `Retry-After` (limitado ao teto) | O provedor pediu para aguardar. |
 | 500 / 502 / 503 / 504 | `PENDING` | Sim, com backoff | Falha temporária do lado dele. |
 | Timeout / erro de conexão | `PENDING` | Sim, com backoff e a **mesma** chave | Resultado ambíguo. Só é seguro repetir por causa da chave de idempotência. |
