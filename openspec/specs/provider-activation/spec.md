@@ -33,11 +33,15 @@ Duas instâncias ou execuções concorrentes do processamento MUST NOT enviar a 
 - **THEN** cada solicitação é enviada ao provedor exatamente uma vez
 
 ### Requirement: Chave de idempotência e correlação no envio
-Toda chamada ao provedor MUST enviar o header `Idempotency-Key` com o `id` da solicitação, igual em todas as tentativas, e o header `X-Correlation-Id`.
+Toda chamada ao provedor MUST enviar o header `Idempotency-Key` com o `id` da solicitação, igual em todas as tentativas, e o header `X-Correlation-Id` com o mesmo correlation id da requisição HTTP que criou a solicitação.
 
 #### Scenario: Retentativa após timeout reutiliza a chave
 - **WHEN** a primeira chamada de uma solicitação expira por timeout e uma nova tentativa é feita
 - **THEN** as duas chamadas recebidas pelo provedor têm o mesmo `Idempotency-Key`
+
+#### Scenario: Correlation id da criação chega ao provedor
+- **WHEN** a solicitação foi criada com `X-Correlation-Id: abc-123`
+- **THEN** a chamada ao provedor para essa solicitação traz `X-Correlation-Id: abc-123`
 
 ### Requirement: Conclusão por sucesso do provedor
 Uma resposta 2xx do provedor SHALL mover a solicitação para `COMPLETED`.
