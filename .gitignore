@@ -1,0 +1,17 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+### IDE ###
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+.factorypath
+
+### Material de estudo pessoal (não faz parte da entrega) ###
+estudo/
+
+### Enunciado ###
+Desafio Java Pleno_Sênior · Candidato.html
