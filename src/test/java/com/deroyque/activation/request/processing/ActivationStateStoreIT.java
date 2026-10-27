@@ -1,4 +1,4 @@
-package com.deroyque.activation.request.app;
+package com.deroyque.activation.request.processing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

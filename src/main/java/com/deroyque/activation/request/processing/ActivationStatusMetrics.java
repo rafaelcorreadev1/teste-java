@@ -1,4 +1,4 @@
-package com.deroyque.activation.request.app;
+package com.deroyque.activation.request.processing;
 
 import java.util.Arrays;
 import java.util.EnumMap;
@@ -13,10 +13,6 @@ import org.springframework.stereotype.Component;
 import com.deroyque.activation.request.domain.ActivationStatus;
 import com.deroyque.activation.request.infra.ActivationRequestRepository;
 
-/**
- * Quantidade de solicitações por status. É recalculada periodicamente, e não a cada scrape,
- * para que o Prometheus não dispare um count no banco a cada coleta.
- */
 @Component
 public class ActivationStatusMetrics {
 

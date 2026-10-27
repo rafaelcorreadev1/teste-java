@@ -19,8 +19,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.deroyque.activation.request.app.ActivationDispatcher;
-import com.deroyque.activation.request.app.ActivationStatusMetrics;
+import com.deroyque.activation.request.processing.ActivationDispatcher;
+import com.deroyque.activation.request.processing.ActivationStatusMetrics;
 import com.deroyque.activation.support.DatabaseCleaner;
 import com.deroyque.activation.support.IntegrationTest;
 import com.deroyque.activation.support.TestJwts;

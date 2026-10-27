@@ -21,10 +21,6 @@ import org.springframework.stereotype.Component;
 import com.deroyque.activation.shared.error.ProblemTypes;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/**
- * Mantém 401 e 403 no mesmo contrato de erro da API. Os handlers padrão do Spring Security
- * continuam responsáveis pelo header WWW-Authenticate (RFC 6750); aqui só se escreve o corpo.
- */
 @Component
 public class ProblemDetailsSecurityHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
 

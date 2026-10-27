@@ -24,7 +24,6 @@ public class ActivationRequestService {
 
     private static final Logger log = LoggerFactory.getLogger(ActivationRequestService.class);
 
-    /** O desempate por id evita itens repetidos ou pulados entre páginas quando há createdAt iguais. */
     private static final Sort LISTING_ORDER = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final ActivationRequestWriter writer;
@@ -37,10 +36,6 @@ public class ActivationRequestService {
         this.clock = clock;
     }
 
-    /**
-     * Não é transacional de propósito: após a violação da constraint a transação do insert
-     * fica marcada para rollback, e a leitura do registro vencedor precisa de uma transação nova.
-     */
     public CreateResult create(NewActivationRequest command) {
         ActivationRequest request = ActivationRequest.create(command.clientId(),
                 command.externalId(), command.customerId(), command.productCode(), clock.instant());
@@ -55,7 +50,6 @@ public class ActivationRequestService {
         }
     }
 
-    /** Solicitação de outro cliente responde como inexistente, para não revelar que o id existe. */
     public ActivationRequest findById(UUID id, String clientId) {
         return repository.findByIdAndClientId(id, clientId).orElseThrow(() -> {
             log.debug("Solicitação {} não encontrada para o cliente {}", id, clientId);

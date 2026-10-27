@@ -8,10 +8,6 @@ import org.springframework.data.jpa.domain.Specification;
 import com.deroyque.activation.request.domain.ActivationRequest;
 import com.deroyque.activation.request.domain.ActivationStatus;
 
-/**
- * Monta só os predicados informados. O padrão "(:param is null or coluna = :param)" numa query única
- * leva o Postgres a planos genéricos que ignoram os índices compostos.
- */
 public final class ActivationRequestSpecifications {
 
     private ActivationRequestSpecifications() {

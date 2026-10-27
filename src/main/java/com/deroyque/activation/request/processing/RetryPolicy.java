@@ -1,14 +1,10 @@
-package com.deroyque.activation.request.app;
+package com.deroyque.activation.request.processing;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.random.RandomGenerator;
 
-/**
- * Backoff exponencial com jitter: min(teto, base·2^(n−1)) × aleatório[0,5; 1,0).
- * O jitter evita que solicitações que falharam juntas voltem todas ao mesmo tempo.
- */
 public class RetryPolicy {
 
     private final Duration base;

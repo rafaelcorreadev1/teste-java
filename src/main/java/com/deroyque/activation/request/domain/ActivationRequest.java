@@ -79,7 +79,6 @@ public class ActivationRequest {
         return new ActivationRequest(clientId, externalId, customerId, productCode, now);
     }
 
-    /** A tentativa é contada aqui, e não no resultado, para que envios interrompidos por queda também a consumam. */
     public void startProcessing(Instant now) {
         transitionTo(ActivationStatus.PROCESSING, now);
         attempts++;
@@ -103,7 +102,6 @@ public class ActivationRequest {
         processingStartedAt = null;
     }
 
-    /** Liga o processamento assíncrono à requisição HTTP que criou a solicitação. */
     public void traceWith(String correlationId) {
         this.correlationId = correlationId;
     }

@@ -1,4 +1,4 @@
-package com.deroyque.activation.request.app;
+package com.deroyque.activation.request.processing;
 
 import java.time.Instant;
 import java.util.List;
@@ -14,10 +14,6 @@ import com.deroyque.activation.request.domain.ActivationRequest;
 import com.deroyque.activation.request.domain.ActivationStatus;
 import com.deroyque.activation.request.infra.ActivationRequestRepository;
 
-/**
- * Transações curtas do processamento. Fica separado do {@link ActivationDispatcher} porque
- * {@code @Transactional} é aplicado por proxy e seria ignorado em chamadas internas.
- */
 @Component
 class ActivationStateStore {
 

@@ -8,8 +8,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-import com.deroyque.activation.request.app.ActivationWorkerProperties;
-import com.deroyque.activation.request.app.RetryPolicy;
+import com.deroyque.activation.request.processing.ActivationWorkerProperties;
+import com.deroyque.activation.request.processing.RetryPolicy;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(ActivationWorkerProperties.class)
@@ -17,8 +17,6 @@ class ActivationWorkerConfig {
 
     @Bean
     RetryPolicy retryPolicy(ActivationWorkerProperties properties) {
-        // RandomGenerator.getDefault() depende do módulo jdk.random, ausente na imagem JRE enxuta;
-        // java.util.Random está no java.base e é thread-safe.
         return new RetryPolicy(properties.backoffBase(), properties.backoffCap(), properties.maxAttempts(),
                 new Random());
     }

@@ -2,7 +2,6 @@ spring:
   application:
     name: activation-service
   config:
-    # Permite rodar localmente com as mesmas variáveis do docker compose (arquivo opcional, não versionado).
     import: optional:file:.env[.properties]
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/activation}

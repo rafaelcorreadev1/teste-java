@@ -17,7 +17,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 
-/** Garante que os mappings usados no docker-compose produzem o comportamento documentado no README. */
 class ProviderMockMappingsTest {
 
     @RegisterExtension

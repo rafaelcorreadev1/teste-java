@@ -8,7 +8,6 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 
-/** Tokens para MockMvc sem servidor de autorização: o decoder é contornado e só os claims importam. */
 public final class TestJwts {
 
     public static final String SYSTEM_A = "sys-a";

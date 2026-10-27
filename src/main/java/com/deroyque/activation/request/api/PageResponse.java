@@ -5,7 +5,6 @@ import java.util.function.Function;
 
 import org.springframework.data.domain.Page;
 
-/** Contrato próprio de página, para não expor a serialização interna do {@code Page} do Spring. */
 public record PageResponse<T>(List<T> content, int page, int size, long totalElements, int totalPages) {
 
     static <E, T> PageResponse<T> from(Page<E> page, Function<E, T> mapper) {

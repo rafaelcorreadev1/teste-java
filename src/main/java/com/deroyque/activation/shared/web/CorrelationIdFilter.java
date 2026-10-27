@@ -22,7 +22,6 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     public static final String HEADER = "X-Correlation-Id";
     public static final String MDC_KEY = "traceId";
 
-    // O valor vai para logs e headers; aceitar qualquer texto abriria espaço para log injection.
     private static final Pattern VALID_ID = Pattern.compile("[A-Za-z0-9-]{1,64}");
 
     @Override

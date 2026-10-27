@@ -8,11 +8,6 @@ import org.springframework.test.context.DynamicPropertyRegistrar;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 
-/**
- * Um WireMock simula as dependências HTTP externas: o provedor de ativação e o JWKS do emissor de tokens.
- * Bean em vez de {@code @DynamicPropertySource}: assim a URL não entra na chave do cache de contexto e
- * todas as classes de integração continuam compartilhando o mesmo contexto.
- */
 @TestConfiguration(proxyBeanMethods = false)
 public class ProviderMockConfiguration {
 

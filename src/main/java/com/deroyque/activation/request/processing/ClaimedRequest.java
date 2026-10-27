@@ -1,4 +1,4 @@
-package com.deroyque.activation.request.app;
+package com.deroyque.activation.request.processing;
 
 import java.util.UUID;
 

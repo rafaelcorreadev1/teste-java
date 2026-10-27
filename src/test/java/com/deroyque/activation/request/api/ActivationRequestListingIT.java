@@ -118,7 +118,6 @@ class ActivationRequestListingIT {
                 + "order by created_at desc limit 20")).contains("ix_activation_request_client_customer");
     }
 
-    /** Com a tabela quase vazia o planner sempre prefere seq scan; desligá-lo mostra se o índice atende à consulta. */
     private String explain(String sql) {
         return transactionTemplate.execute(status -> {
             jdbc.execute("set local enable_seqscan = off");

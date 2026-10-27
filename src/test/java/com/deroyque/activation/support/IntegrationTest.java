@@ -10,11 +10,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
-/**
- * Todas as classes de integração usam a mesma configuração para que o Spring
- * reaproveite o contexto em cache e, com ele, um único container Postgres e um único WireMock.
- * O worker agendado fica desligado: os testes acionam o processamento de forma determinística.
- */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @SpringBootTest(properties = {

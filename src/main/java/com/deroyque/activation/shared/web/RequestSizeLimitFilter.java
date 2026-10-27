@@ -21,10 +21,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/**
- * Rejeita corpos acima do limite. O Content-Length é checado antes de ler; corpos sem ele
- * (chunked) são lidos por um stream que interrompe a leitura ao ultrapassar o limite.
- */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
 public class RequestSizeLimitFilter extends OncePerRequestFilter {

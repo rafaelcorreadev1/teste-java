@@ -1,4 +1,4 @@
-package com.deroyque.activation.request.app;
+package com.deroyque.activation.request.processing;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
@@ -13,6 +13,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.deroyque.activation.request.app.ActivationRequestService;
+import com.deroyque.activation.request.app.NewActivationRequest;
 import com.deroyque.activation.request.domain.ActivationRequest;
 import com.deroyque.activation.request.domain.ActivationStatus;
 import com.deroyque.activation.request.infra.ActivationRequestRepository;

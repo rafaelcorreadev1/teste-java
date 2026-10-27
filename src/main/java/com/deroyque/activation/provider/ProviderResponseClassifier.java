@@ -22,7 +22,6 @@ final class ProviderResponseClassifier {
         return new ProviderResult.PermanentFailure(status);
     }
 
-    /** Retry-After pode vir em segundos ou como data HTTP (RFC 9110 §10.2.3). */
     static Optional<Duration> parseRetryAfter(String header, Instant now) {
         if (header == null || header.isBlank()) {
             return Optional.empty();

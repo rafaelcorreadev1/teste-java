@@ -67,7 +67,6 @@ class ActivationRequestControllerTest {
     @Autowired
     MockMvc anonymousMvc;
 
-    /** Autenticado como sys-a com leitura e escrita; os testes de segurança usam {@link #anonymousMvc}. */
     MockMvc mvc;
 
     @MockitoBean

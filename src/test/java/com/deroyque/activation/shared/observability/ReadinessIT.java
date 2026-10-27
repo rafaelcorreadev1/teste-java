@@ -13,10 +13,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.deroyque.activation.support.IntegrationTest;
 
-/**
- * Simula o banco fora do ar substituindo o health indicator dele. Usa um contexto próprio
- * em vez de derrubar o container compartilhado pelos outros testes.
- */
 @IntegrationTest
 class ReadinessIT {
 

@@ -21,7 +21,6 @@ public interface ActivationRequestRepository
 
     Optional<ActivationRequest> findByClientIdAndExternalId(String clientId, String externalId);
 
-    /** SKIP LOCKED faz instâncias concorrentes pularem as linhas já reivindicadas em vez de esperar por elas. */
     @Query(value = """
             select * from activation_request
              where status = 'PENDING' and next_attempt_at <= :now

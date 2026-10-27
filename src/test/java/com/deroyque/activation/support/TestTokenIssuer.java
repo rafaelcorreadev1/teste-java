@@ -19,10 +19,6 @@ import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 
-/**
- * Emissor de tokens de teste: assina JWTs com uma chave RSA local e publica a chave pública
- * no WireMock, para que o {@code JwtDecoder} real (assinatura, iss, aud, exp) seja exercitado.
- */
 public final class TestTokenIssuer {
 
     public static final String ISSUER = "https://auth.test/realms/activation";

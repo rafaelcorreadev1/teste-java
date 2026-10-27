@@ -51,7 +51,6 @@ public class SecurityConfig {
                 .build();
     }
 
-    /** As chaves vêm do JWKS do emissor; o Nimbus as mantém em cache e as renova quando aparece um {@code kid} novo. */
     @Bean
     JwtDecoder jwtDecoder(SecurityProperties properties) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri()).build();

@@ -1,4 +1,4 @@
-package com.deroyque.activation.request.app;
+package com.deroyque.activation.request.processing;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -16,10 +16,6 @@ import com.deroyque.activation.provider.ProviderResult;
 import com.deroyque.activation.request.infra.ActivationRequestRepository;
 import com.deroyque.activation.shared.web.CorrelationIdFilter;
 
-/**
- * Envia ao provedor as solicitações pendentes. A chamada HTTP acontece fora de qualquer
- * transação: só a reivindicação do lote e a gravação do resultado tocam o banco.
- */
 @Component
 public class ActivationDispatcher {
 
@@ -75,7 +71,6 @@ public class ActivationDispatcher {
         } catch (OptimisticLockingFailureException e) {
             log.warn("Solicitação {} foi atualizada por outro processo; resultado descartado", request.id());
         } catch (RuntimeException e) {
-            // Fica em PROCESSING e a reconciliação a devolve para nova tentativa depois do lease.
             log.error("Falha inesperada ao processar a solicitação {}", request.id(), e);
         } finally {
             MDC.remove("requestId");

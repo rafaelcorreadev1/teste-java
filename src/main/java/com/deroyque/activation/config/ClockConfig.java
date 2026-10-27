@@ -11,7 +11,6 @@ class ClockConfig {
 
     @Bean
     Clock clock() {
-        // timestamptz guarda microssegundos; com nanos, o POST e o GET devolveriam instantes diferentes.
         return Clock.tickMillis(ZoneOffset.UTC);
     }
 }

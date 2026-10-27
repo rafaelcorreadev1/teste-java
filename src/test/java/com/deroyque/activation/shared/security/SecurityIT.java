@@ -24,7 +24,6 @@ import com.deroyque.activation.support.TestTokenIssuer;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.jayway.jsonpath.JsonPath;
 
-/** Tokens reais assinados, validados pelo JwtDecoder configurado na aplicação (sem o atalho jwt() do MockMvc). */
 @IntegrationTest
 class SecurityIT {
 

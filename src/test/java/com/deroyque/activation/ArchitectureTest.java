@@ -31,6 +31,12 @@ class ArchitectureTest {
             .because("o controller não acessa o repositório diretamente; o isolamento por cliente vive no serviço");
 
     @ArchTest
+    static final ArchRule apiUseCaseDoesNotDependOnBackgroundProcessing = noClasses()
+            .that().resideInAPackage("..request.app..")
+            .should().dependOnClassesThat().resideInAPackage("..request.processing..")
+            .because("o caso de uso da API só grava a solicitação; o envio ao provedor é assíncrono");
+
+    @ArchTest
     static final ArchRule providerIntegrationIsIndependentOfRequestFeature = noClasses()
             .that().resideInAPackage("..provider..")
             .should().dependOnClassesThat().resideInAPackage("..request..")

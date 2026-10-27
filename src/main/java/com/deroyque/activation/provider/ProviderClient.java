@@ -30,7 +30,6 @@ public class ProviderClient {
     private final MeterRegistry meterRegistry;
 
     ProviderClient(ProviderProperties properties, RestClient.Builder builder, Clock clock, MeterRegistry meterRegistry) {
-        // O padrão do JDK tenta upgrade h2c em HTTP puro, que vários servidores (inclusive o WireMock) abortam.
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(properties.connectTimeout())
