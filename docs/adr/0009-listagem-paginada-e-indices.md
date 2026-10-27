@@ -1,6 +1,6 @@
 # 0009. Listar com paginação e filtros, com índices compostos guiados pelas consultas
 
-- Status: Proposto
+- Status: Aceito
 - Data: 2026-10-27
 - Change: `add-request-listing`
 

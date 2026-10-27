@@ -111,6 +111,15 @@ Regras de validação, iguais para `externalId`, `customerId` e `productCode`:
 
 Datas em UTC, ISO-8601, com precisão de milissegundos.
 
+### `GET /api/v1/requests?status=&customerId=&page=&size=`
+
+Escopo exigido: `activation:read`. Lista **apenas as solicitações do cliente do token**, da mais recente para a mais antiga. Os filtros `status` e `customerId` são opcionais e podem ser combinados. `page` começa em 0, e `size` vale 20 por padrão, com máximo de 100.
+
+```json
+{ "content": [ { "id": "...", "status": "FAILED", "...": "..." } ],
+  "page": 0, "size": 20, "totalElements": 3, "totalPages": 1 }
+```
+
 ### `GET /api/v1/requests/{id}`
 
 Escopo exigido: `activation:read`. Retorna a solicitação e o status atual. Responde `404` se ela não existir **ou pertencer a outro cliente**, e `400` se o id não for um UUID.
@@ -191,6 +200,22 @@ Implementada com Spring Security como **OAuth 2.0 Resource Server**. O serviço 
 **Testes sem servidor de autorização:**
 - os testes de controller usam o `jwt()` do `spring-security-test`;
 - o `SecurityIT` assina tokens com uma chave RSA gerada no teste e publica o JWKS no WireMock, exercitando o decoder real com token expirado, dentro da tolerância de relógio, audiência errada, emissor errado, chave desconhecida, escopo insuficiente e acesso entre clientes.
+
+### Listagem e índices — [ADR 0009](docs/adr/0009-listagem-paginada-e-indices.md)
+
+Cada índice existe por causa de uma consulta concreta (migrations V1–V4):
+
+| Índice | Consulta atendida | Por quê |
+|---|---|---|
+| `UNIQUE (client_id, external_id)` | Regra de duplicidade e busca do registro vencedor | É a garantia de unicidade sob concorrência, além de índice de busca. |
+| `(client_id, status, created_at desc)` | Listagem com filtro de `status` | `client_id` vem primeiro porque toda listagem filtra pelo consumidor; `created_at desc` no fim entrega a ordenação pronta, sem *sort*. |
+| `(client_id, customer_id, created_at desc)` | Listagem com filtro de `customerId` | Mesmo raciocínio. |
+| `(next_attempt_at) WHERE status = 'PENDING'` | Busca do worker | Índice **parcial**: contém só pendentes, então fica pequeno mesmo com milhões de solicitações concluídas. |
+| `(processing_started_at) WHERE status = 'PROCESSING'` | Reconciliação | Parcial pelo mesmo motivo. |
+
+A listagem sem filtro usa o prefixo `client_id` desses índices. Se ela virar a consulta mais frequente, o próximo índice seria `(client_id, created_at desc)`, decisão a tomar com dados reais de `pg_stat_statements`. O `ActivationRequestListingIT` confirma via `EXPLAIN` que os filtros usam os índices compostos.
+
+Os filtros são montados com `Specification`, só com os predicados informados. O padrão `(:status is null or status = :status)` numa query única costuma gerar no Postgres um plano genérico que ignora os índices. A paginação é por *offset*. Para tabelas muito grandes, a evolução é paginação por cursor (*keyset*), porque o offset degrada em páginas profundas.
 
 ### Status da solicitação — [ADR 0004](docs/adr/0004-maquina-de-estados-no-dominio.md)
 
