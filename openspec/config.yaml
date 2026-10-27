@@ -1,0 +1,38 @@
+schema: spec-driven
+
+context: |
+  Language: pt-BR
+  All artifacts must be written in pt-BR.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Projeto: desafio técnico Java Pleno/Sênior (Deroyque) — serviço de ativação de
+  produtos de clientes. Enunciado original: "Desafio Java Pleno_Sênior · Candidato.html".
+  Recomendação do enunciado: até ~4h de esforço; solução simples e bem estruturada
+  vale mais que arquitetura complexa. Itens não implementados são descritos no README.
+
+  Stack: Java 21, Spring Boot 3.5 (Spring MVC, Spring Data JPA/Hibernate, Spring
+  Security Resource Server), Maven (wrapper), PostgreSQL 16, Flyway, JUnit 5,
+  Mockito, AssertJ, Testcontainers, WireMock, Docker/Docker Compose, GitHub Actions.
+
+  Estrutura de pacotes (por feature, sem camadas excessivas):
+  com.deroyque.activation.{request, provider, shared, config}.
+  DTOs como records, separados das entidades JPA. Erros via ProblemDetail (RFC 9457).
+
+  Decisões de arquitetura são registradas em docs/adr/NNNN-titulo.md (formato MADR
+  em pt-BR). Uma change que toma decisão arquitetural referencia o ADR no design.md.
+
+rules:
+  design:
+    - Referencie o ADR correspondente (docs/adr/NNNN-*.md) em cada decisão arquitetural.
+  tasks:
+    - O último grupo de tarefas de toda change SHALL ser "Documentação e estudo", contendo
+      marcar ADRs relacionados como Aceito, atualizar a seção da change em
+      estudo/estudo.html e regerar estudo/estudo.pdf com estudo/gerar-pdf.sh.
+
+operations:
+  apply:
+    guidance:
+      - Ao concluir a change, atualize o ADR (Status Aceito), a seção correspondente em
+        estudo/estudo.html (o que foi feito, por quê, alternativas, trechos-chave do código,
+        perguntas prováveis na entrevista) e regere o PDF.
+      - Commits pequenos com mensagem explicando a intenção.
