@@ -3,6 +3,8 @@ package com.deroyque.activation.request.app;
 import java.time.Clock;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
@@ -12,6 +14,8 @@ import com.deroyque.activation.shared.persistence.ConstraintViolations;
 
 @Service
 public class ActivationRequestService {
+
+    private static final Logger log = LoggerFactory.getLogger(ActivationRequestService.class);
 
     private final ActivationRequestWriter writer;
     private final ActivationRequestRepository repository;
@@ -42,7 +46,10 @@ public class ActivationRequestService {
 
     /** Solicitação de outro cliente responde como inexistente, para não revelar que o id existe. */
     public ActivationRequest findById(UUID id, String clientId) {
-        return repository.findByIdAndClientId(id, clientId).orElseThrow(() -> new ActivationRequestNotFoundException(id));
+        return repository.findByIdAndClientId(id, clientId).orElseThrow(() -> {
+            log.debug("Solicitação {} não encontrada para o cliente {}", id, clientId);
+            return new ActivationRequestNotFoundException(id);
+        });
     }
 
     private CreateResult resolveDuplicate(NewActivationRequest command, DataIntegrityViolationException cause) {
