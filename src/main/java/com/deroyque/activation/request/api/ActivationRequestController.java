@@ -4,6 +4,10 @@ import java.net.URI;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -13,11 +17,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.deroyque.activation.request.app.ActivationRequestService;
 import com.deroyque.activation.request.app.CreateResult;
+import com.deroyque.activation.request.domain.ActivationStatus;
 import com.deroyque.activation.shared.security.ConsumerIdentity;
 
 @RestController
@@ -40,6 +46,19 @@ class ActivationRequestController {
             case CreateResult.Existing existing -> ResponseEntity
                     .ok(ActivationRequestResponse.from(existing.request()));
         };
+    }
+
+    @GetMapping
+    PageResponse<ActivationRequestResponse> list(
+            @AuthenticationPrincipal Jwt token,
+            @RequestParam(required = false) ActivationStatus status,
+            @RequestParam(required = false) @Size(max = 64) @Pattern(regexp = CreateActivationRequest.IDENTIFIER)
+            String customerId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return PageResponse.from(
+                service.list(ConsumerIdentity.of(token), status, customerId, page, size),
+                ActivationRequestResponse::from);
     }
 
     @GetMapping("/{id}")

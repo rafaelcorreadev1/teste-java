@@ -20,6 +20,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
@@ -66,6 +67,20 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 "Um ou mais parâmetros têm formato inválido.");
         problem.setProperty("errors", List.of(Map.of("field", String.valueOf(parameter), "message", "formato inválido")));
         return handleExceptionInternal(ex, problem, headers, status, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(
+            HandlerMethodValidationException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        List<Map<String, String>> errors = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream().map(error -> Map.of(
+                        "field", String.valueOf(result.getMethodParameter().getParameterName()),
+                        "message", String.valueOf(error.getDefaultMessage()))))
+                .toList();
+        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "validation-error", "Dados inválidos",
+                "Um ou mais parâmetros não passaram na validação.");
+        problem.setProperty("errors", errors);
+        return handleExceptionInternal(ex, problem, headers, HttpStatus.BAD_REQUEST, request);
     }
 
     @ExceptionHandler(ActivationRequestNotFoundException.class)

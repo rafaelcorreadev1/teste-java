@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -119,6 +121,46 @@ class ActivationRequestControllerTest {
                 .andExpect(status().isCreated());
 
         verify(service).create(new NewActivationRequest("sys-b", "EXT-12345", "CUST-10001", "INTERNET-500"));
+    }
+
+    @Test
+    void listUsesDefaultsAndOwnerFromToken() throws Exception {
+        given(service.list("sys-a", null, null, 0, 20)).willReturn(new PageImpl<>(List.of(request),
+                org.springframework.data.domain.PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/api/v1/requests"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].id").value(request.getId().toString()))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.pageable").doesNotExist());
+    }
+
+    @Test
+    void listRejectsPageSizeAboveMaximum() throws Exception {
+        mvc.perform(get("/api/v1/requests").param("size", "1000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value(endsWith("/problems/validation-error")))
+                .andExpect(jsonPath("$.errors[0].field").value("size"));
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void listRejectsNegativePage() throws Exception {
+        mvc.perform(get("/api/v1/requests").param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("page"));
+    }
+
+    @Test
+    void listRejectsUnknownStatus() throws Exception {
+        mvc.perform(get("/api/v1/requests").param("status", "DONE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("status"));
+        verifyNoInteractions(service);
     }
 
     @Test

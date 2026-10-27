@@ -6,11 +6,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
 import com.deroyque.activation.request.domain.ActivationRequest;
 
-public interface ActivationRequestRepository extends JpaRepository<ActivationRequest, UUID> {
+public interface ActivationRequestRepository
+        extends JpaRepository<ActivationRequest, UUID>, JpaSpecificationExecutor<ActivationRequest> {
 
     String EXTERNAL_ID_CONSTRAINT = "uk_activation_request_client_external_id";
 

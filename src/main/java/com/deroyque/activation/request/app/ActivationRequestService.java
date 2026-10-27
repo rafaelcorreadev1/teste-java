@@ -6,9 +6,14 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.deroyque.activation.request.domain.ActivationRequest;
+import com.deroyque.activation.request.domain.ActivationStatus;
+import com.deroyque.activation.request.infra.ActivationRequestSpecifications;
 import com.deroyque.activation.request.infra.ActivationRequestRepository;
 import com.deroyque.activation.shared.persistence.ConstraintViolations;
 
@@ -16,6 +21,9 @@ import com.deroyque.activation.shared.persistence.ConstraintViolations;
 public class ActivationRequestService {
 
     private static final Logger log = LoggerFactory.getLogger(ActivationRequestService.class);
+
+    /** O desempate por id evita itens repetidos ou pulados entre páginas quando há createdAt iguais. */
+    private static final Sort LISTING_ORDER = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final ActivationRequestWriter writer;
     private final ActivationRequestRepository repository;
@@ -50,6 +58,11 @@ public class ActivationRequestService {
             log.debug("Solicitação {} não encontrada para o cliente {}", id, clientId);
             return new ActivationRequestNotFoundException(id);
         });
+    }
+
+    public Page<ActivationRequest> list(String clientId, ActivationStatus status, String customerId, int page, int size) {
+        return repository.findAll(ActivationRequestSpecifications.listing(clientId, status, customerId),
+                PageRequest.of(page, size, LISTING_ORDER));
     }
 
     private CreateResult resolveDuplicate(NewActivationRequest command, DataIntegrityViolationException cause) {
