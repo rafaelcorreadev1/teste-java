@@ -66,7 +66,7 @@ class ActivationRequestRepositoryIT {
         firstCopy.complete(NOW.plusSeconds(1));
         repository.saveAndFlush(firstCopy);
 
-        staleCopy.returnToPending(NOW.plusSeconds(2));
+        staleCopy.returnToPending(NOW.plusSeconds(60), NOW.plusSeconds(2));
         assertThatThrownBy(() -> repository.saveAndFlush(staleCopy))
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
 

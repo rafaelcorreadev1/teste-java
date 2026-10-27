@@ -32,6 +32,18 @@ public class ActivationRequest {
     @Column(nullable = false)
     private ActivationStatus status;
 
+    @Column(nullable = false)
+    private int attempts;
+
+    @Column(name = "next_attempt_at", nullable = false)
+    private Instant nextAttemptAt;
+
+    @Column(name = "processing_started_at")
+    private Instant processingStartedAt;
+
+    @Column(name = "failure_reason")
+    private String failureReason;
+
     @Version
     private Long version;
 
@@ -50,6 +62,7 @@ public class ActivationRequest {
         this.customerId = Objects.requireNonNull(customerId);
         this.productCode = Objects.requireNonNull(productCode);
         this.status = ActivationStatus.PENDING;
+        this.nextAttemptAt = now;
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -58,20 +71,28 @@ public class ActivationRequest {
         return new ActivationRequest(externalId, customerId, productCode, now);
     }
 
+    /** A tentativa é contada aqui, e não no resultado, para que envios interrompidos por queda também a consumam. */
     public void startProcessing(Instant now) {
         transitionTo(ActivationStatus.PROCESSING, now);
+        attempts++;
+        processingStartedAt = now;
     }
 
     public void complete(Instant now) {
         transitionTo(ActivationStatus.COMPLETED, now);
+        processingStartedAt = null;
     }
 
-    public void fail(Instant now) {
+    public void fail(String reason, Instant now) {
         transitionTo(ActivationStatus.FAILED, now);
+        failureReason = Objects.requireNonNull(reason);
+        processingStartedAt = null;
     }
 
-    public void returnToPending(Instant now) {
+    public void returnToPending(Instant nextAttemptAt, Instant now) {
         transitionTo(ActivationStatus.PENDING, now);
+        this.nextAttemptAt = Objects.requireNonNull(nextAttemptAt);
+        processingStartedAt = null;
     }
 
     public boolean hasSameContentAs(String customerId, String productCode) {
@@ -104,6 +125,22 @@ public class ActivationRequest {
 
     public ActivationStatus getStatus() {
         return status;
+    }
+
+    public int getAttempts() {
+        return attempts;
+    }
+
+    public Instant getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public Instant getProcessingStartedAt() {
+        return processingStartedAt;
+    }
+
+    public String getFailureReason() {
+        return failureReason;
     }
 
     public Long getVersion() {

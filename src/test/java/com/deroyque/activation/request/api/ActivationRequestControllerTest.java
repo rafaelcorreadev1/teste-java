@@ -65,6 +65,8 @@ class ActivationRequestControllerTest {
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.createdAt").value("2026-10-27T12:00:00Z"))
                 .andExpect(jsonPath("$.updatedAt").value("2026-10-27T12:00:00Z"))
+                .andExpect(jsonPath("$.attempts").value(0))
+                .andExpect(jsonPath("$.failureReason").isEmpty())
                 .andExpect(jsonPath("$.version").doesNotExist());
     }
 
@@ -140,6 +142,19 @@ class ActivationRequestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.externalId").value("EXT-12345"))
                 .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
+    void getFailedRequestExposesReasonAndAttempts() throws Exception {
+        ActivationRequest failed = ActivationRequest.create("EXT-9", "CUST-1", "X-REJECT", NOW);
+        failed.startProcessing(NOW);
+        failed.fail("PROVIDER_REJECTED_400", NOW);
+        given(service.findById(failed.getId())).willReturn(failed);
+
+        mvc.perform(get("/api/v1/requests/{id}", failed.getId()))
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.failureReason").value("PROVIDER_REJECTED_400"))
+                .andExpect(jsonPath("$.attempts").value(1));
     }
 
     @Test

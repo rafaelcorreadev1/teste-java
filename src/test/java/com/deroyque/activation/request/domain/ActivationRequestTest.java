@@ -16,11 +16,23 @@ class ActivationRequestTest {
     private final ActivationRequest request = ActivationRequest.create("EXT-1", "CUST-1", "INTERNET-500", T0);
 
     @Test
-    void newRequestIsPendingWithEqualTimestamps() {
+    void newRequestIsPendingAndDueImmediately() {
         assertThat(request.getId()).isNotNull();
         assertThat(request.getStatus()).isEqualTo(ActivationStatus.PENDING);
         assertThat(request.getCreatedAt()).isEqualTo(T0);
         assertThat(request.getUpdatedAt()).isEqualTo(T0);
+        assertThat(request.getAttempts()).isZero();
+        assertThat(request.getNextAttemptAt()).isEqualTo(T0);
+        assertThat(request.getFailureReason()).isNull();
+    }
+
+    @Test
+    void startProcessingCountsAttemptAndMarksStart() {
+        request.startProcessing(T1);
+
+        assertThat(request.getStatus()).isEqualTo(ActivationStatus.PROCESSING);
+        assertThat(request.getAttempts()).isEqualTo(1);
+        assertThat(request.getProcessingStartedAt()).isEqualTo(T1);
     }
 
     @Test
@@ -31,14 +43,28 @@ class ActivationRequestTest {
         assertThat(request.getStatus()).isEqualTo(ActivationStatus.COMPLETED);
         assertThat(request.getUpdatedAt()).isEqualTo(T2);
         assertThat(request.getCreatedAt()).isEqualTo(T0);
+        assertThat(request.getProcessingStartedAt()).isNull();
     }
 
     @Test
-    void temporaryFailureReturnsToPending() {
+    void temporaryFailureReturnsToPendingWithNextAttempt() {
+        Instant nextAttempt = T2.plusSeconds(60);
         request.startProcessing(T1);
-        request.returnToPending(T2);
+        request.returnToPending(nextAttempt, T2);
 
         assertThat(request.getStatus()).isEqualTo(ActivationStatus.PENDING);
+        assertThat(request.getNextAttemptAt()).isEqualTo(nextAttempt);
+        assertThat(request.getAttempts()).isEqualTo(1);
+        assertThat(request.getProcessingStartedAt()).isNull();
+    }
+
+    @Test
+    void failureRecordsReason() {
+        request.startProcessing(T1);
+        request.fail("PROVIDER_REJECTED_400", T2);
+
+        assertThat(request.getStatus()).isEqualTo(ActivationStatus.FAILED);
+        assertThat(request.getFailureReason()).isEqualTo("PROVIDER_REJECTED_400");
     }
 
     @Test
@@ -51,15 +77,17 @@ class ActivationRequestTest {
                 .hasMessageContaining("COMPLETED -> PROCESSING");
         assertThat(request.getStatus()).isEqualTo(ActivationStatus.COMPLETED);
         assertThat(request.getUpdatedAt()).isEqualTo(T1);
+        assertThat(request.getAttempts()).isEqualTo(1);
     }
 
     @Test
     void cannotSkipProcessing() {
         assertThatThrownBy(() -> request.complete(T1))
                 .isInstanceOf(InvalidStatusTransitionException.class);
-        assertThatThrownBy(() -> request.fail(T1))
+        assertThatThrownBy(() -> request.fail("X", T1))
                 .isInstanceOf(InvalidStatusTransitionException.class);
         assertThat(request.getStatus()).isEqualTo(ActivationStatus.PENDING);
+        assertThat(request.getFailureReason()).isNull();
     }
 
     @Test

@@ -12,6 +12,8 @@ public record ActivationRequestResponse(
         String customerId,
         String productCode,
         ActivationStatus status,
+        int attempts,
+        String failureReason,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -22,6 +24,8 @@ public record ActivationRequestResponse(
                 request.getCustomerId(),
                 request.getProductCode(),
                 request.getStatus(),
+                request.getAttempts(),
+                request.getFailureReason(),
                 request.getCreatedAt(),
                 request.getUpdatedAt());
     }
