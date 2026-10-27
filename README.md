@@ -21,40 +21,52 @@ Decisões de arquitetura: [`docs/adr/`](docs/adr/README.md). Especificações (r
 
 ## Como executar
 
-### Pré-requisitos
+### 1. Pré-requisitos
 
-- JDK 21
-- Docker (para o ambiente local e para os testes de integração com Testcontainers)
+| Para... | Você precisa de |
+|---|---|
+| Subir tudo e usar a API | **Docker** (Docker Desktop no Windows/macOS) com o Docker Compose v2, e `git` |
+| Rodar os testes ou a aplicação fora do contêiner | também o **JDK 21** (ex.: [Eclipse Temurin](https://adoptium.net/)). **Não** é preciso instalar o Maven: o projeto traz o wrapper (`mvnw`) |
+| Rodar o teste de fumaça (opcional) | **Node.js 18+** |
 
-### Testes
+As portas **8080** (API), **5432** (Postgres), **8089** (mock do provedor) e **8180** (Keycloak) precisam estar livres.
 
-```bash
-./mvnw verify
-```
-
-Um único comando compila e roda:
-- os testes unitários e de arquitetura (`*Test`, Surefire);
-- os testes de integração (`*IT`, Failsafe) contra um PostgreSQL 16 real e um WireMock, que sobem automaticamente.
-
-### Tudo em contêineres (um comando)
+### 2. Clonar e configurar
 
 ```bash
-docker compose up -d --build --wait   # app (8080) + Postgres (5432) + mock do provedor (8089) + Keycloak (8180)
-node scripts/smoke-test.mjs           # 40 verificações HTTP de ponta a ponta contra o ambiente
-docker compose down
+git clone https://github.com/rafaelcorreadev1/teste-java.git
+cd teste-java
+cp .env.example .env        # Windows (PowerShell): Copy-Item .env.example .env
 ```
 
-### Aplicação fora do contêiner (desenvolvimento)
+O `.env` é **opcional**: sem ele, tudo usa os mesmos valores padrão de desenvolvimento. Ele existe para você mudar portas, credenciais ou timeouts sem mexer em código. O mesmo arquivo é lido:
+- pelo **Docker Compose**, que o carrega automaticamente;
+- pela **aplicação**, quando roda fora do contêiner (`spring.config.import: optional:file:.env[.properties]` no `application.yml`).
+
+O `.env` não é versionado; o modelo comentado é o [`.env.example`](.env.example). Em produção, as mesmas variáveis vêm do orquestrador e de um cofre de segredos (ver [Produção](#produção)).
+
+### 3. Subir o ambiente completo (só Docker)
 
 ```bash
-docker compose up -d --wait postgres provider-mock keycloak
-./mvnw spring-boot:run
-curl localhost:8080/actuator/health
+docker compose up -d --build --wait
 ```
 
-O schema é criado pelo Flyway na subida (`src/main/resources/db/migration`).
+Na primeira vez, o comando baixa as imagens e compila a aplicação dentro do Docker (alguns minutos). Ao terminar, todos os serviços estão *healthy*:
 
-Todas as chamadas em `/api/**` exigem um token. O Keycloak do compose já sobe com o realm `activation` (`docker/keycloak/activation-realm.json`) e três clientes:
+| Serviço | Endereço | Para quê |
+|---|---|---|
+| `app` | http://localhost:8080 | A API |
+| `postgres` | `localhost:5432` (usuário/senha `activation`) | Banco; o schema é criado pelo Flyway na subida |
+| `provider-mock` | http://localhost:8089 | Mock do provedor externo (WireMock) |
+| `keycloak` | http://localhost:8180 (admin/admin) | Emissor de tokens de desenvolvimento |
+
+```bash
+curl http://localhost:8080/actuator/health/readiness     # {"status":"UP"}
+```
+
+### 4. Obter um token e chamar a API
+
+Toda chamada em `/api/**` exige um token OAuth 2.0. O Keycloak do compose já vem com três clientes (fluxo *client credentials*):
 
 | Cliente | Segredo | Escopos |
 |---|---|---|
@@ -62,45 +74,107 @@ Todas as chamadas em `/api/**` exigem um token. O Keycloak do compose já sobe c
 | `sistema-b` | `sistema-b-secret` | `activation:read activation:write` |
 | `sistema-leitura` | `sistema-leitura-secret` | `activation:read` |
 
+**Linux, macOS ou Git Bash** (usa [`jq`](https://jqlang.org/)):
+
 ```bash
-TOKEN=$(curl -s -X POST localhost:8180/realms/activation/protocol/openid-connect/token \
+TOKEN=$(curl -s -X POST http://localhost:8180/realms/activation/protocol/openid-connect/token \
   -d grant_type=client_credentials -d client_id=sistema-a -d client_secret=sistema-a-secret | jq -r .access_token)
+
+curl -i -X POST http://localhost:8080/api/v1/requests \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"externalId":"EXT-1","customerId":"CUST-1","productCode":"INTERNET-500"}'
+
+curl -s "http://localhost:8080/api/v1/requests?status=COMPLETED" -H "Authorization: Bearer $TOKEN"
 ```
 
-O mock do provedor (WireMock, mappings em `docker/wiremock/`) escolhe a resposta pelo `productCode`. Isso permite ver cada caminho da integração:
+**Windows (PowerShell):**
+
+```powershell
+$TOKEN = (Invoke-RestMethod -Method Post -Uri http://localhost:8180/realms/activation/protocol/openid-connect/token `
+  -Body @{ grant_type='client_credentials'; client_id='sistema-a'; client_secret='sistema-a-secret' }).access_token
+$H = @{ Authorization = "Bearer $TOKEN" }
+
+$req = Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/v1/requests -Headers $H `
+  -ContentType 'application/json' -Body '{"externalId":"EXT-1","customerId":"CUST-1","productCode":"INTERNET-500"}'
+Start-Sleep 5
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/requests/$($req.id)" -Headers $H     # PENDING -> COMPLETED
+```
+
+A ativação acontece em segundo plano: a solicitação nasce `PENDING`, e o `GET` mostra o status final alguns segundos depois. Logo após subir o ambiente, o primeiro ciclo do worker pode demorar um pouco mais; se ainda estiver `PENDING`, repita o `GET`. O mock do provedor escolhe a resposta pelo `productCode`, o que permite ver cada caminho da integração:
 
 | `productCode` contém | Resposta do mock | Status final esperado |
 |---|---|---|
 | `REJECT` (ex.: `X-REJECT`) | 400 | `FAILED` (`PROVIDER_REJECTED_400`) |
-| `ERROR` (ex.: `X-ERROR`) | 500 | `PENDING` com retentativas, depois `FAILED` (`MAX_ATTEMPTS_EXCEEDED`) |
+| `ERROR` (ex.: `X-ERROR`) | 500 | Retentativas com backoff e, após a 5ª, `FAILED` (`MAX_ATTEMPTS_EXCEEDED`), em cerca de 30 s |
 | `SLOW` (ex.: `X-SLOW`) | 200 após 8 s (acima do timeout de 5 s) | igual ao caso `ERROR` |
 | qualquer outro (ex.: `INTERNET-500`) | 200 | `COMPLETED` |
 
+### 5. Teste de fumaça (opcional)
+
+Com o ambiente no ar, 40 verificações HTTP de ponta a ponta (criação, duplicidade e concorrência, erros, autorização entre clientes, integração com o provedor, listagem e métricas):
+
 ```bash
-id=$(curl -s -X POST localhost:8080/api/v1/requests -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"externalId":"EXT-1","customerId":"CUST-1","productCode":"INTERNET-500"}' | jq -r .id)
-sleep 3 && curl -s localhost:8080/api/v1/requests/$id -H "Authorization: Bearer $TOKEN"   # status: COMPLETED
+node scripts/smoke-test.mjs        # termina com "40/40 verificações passaram."
 ```
+
+### 6. Testes automatizados
+
+```bash
+./mvnw verify          # Windows (cmd/PowerShell): .\mvnw.cmd verify
+```
+
+Um único comando compila e roda:
+- os testes unitários e de arquitetura (`*Test`, Surefire);
+- os testes de integração (`*IT`, Failsafe) contra um PostgreSQL 16 real e um WireMock, que o Testcontainers sobe sozinho.
+
+Exige o JDK 21 e o **Docker em execução**. Não precisa do `docker compose up`.
+
+### 7. Rodar a aplicação fora do contêiner (desenvolvimento)
+
+Útil para depurar na IDE. Sobe só as dependências e roda a aplicação com o Maven Wrapper:
+
+```bash
+docker compose up -d --wait postgres provider-mock keycloak
+./mvnw spring-boot:run           # Windows: .\mvnw.cmd spring-boot:run
+```
+
+Os padrões (e o `.env.example`) já apontam para `localhost`, então nada mais precisa ser configurado. Também é possível executar a classe `ActivationApplication` direto pela IDE, a partir da raiz do projeto, para que o `.env` seja encontrado.
+
+### 8. Parar e limpar
+
+```bash
+docker compose down        # para e remove os contêineres
+docker compose down -v     # também apaga os dados do Postgres
+```
+
+### Problemas comuns
+
+| Sintoma | Causa provável e solução |
+|---|---|
+| `port is already allocated` / `address already in use` | Outra coisa usa 8080/5432/8089/8180. Pare o processo, ou mude `SERVER_PORT` no `.env` (para a API). |
+| `./mvnw: Permission denied` | Rode `chmod +x mvnw`, ou use `sh mvnw verify`. |
+| Testes falham com `Could not find a valid Docker environment` | O Docker não está rodando. Os testes de integração usam Testcontainers. |
+| API responde `401` com token | Token expirado (vale 5 min): gere outro. Ou ele foi pedido por outro endereço que não `localhost:8180`, o que muda o emissor (`iss`). |
+| `docker compose up --wait` falha em `app` | Veja o motivo com `docker compose logs app`. Na primeira subida o Keycloak pode demorar; rode o comando de novo. |
 
 ### Configuração
 
+Todas as variáveis estão comentadas no [`.env.example`](.env.example). Resumo:
+
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/activation` | URL JDBC do PostgreSQL |
-| `DB_USER` | `activation` | Usuário do banco |
-| `DB_PASSWORD` | `activation` | Senha do banco |
-| `SERVER_PORT` | `8080` | Porta HTTP |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` | `activation` | Banco do Postgres (compose e aplicação) |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/activation` | URL JDBC quando a aplicação roda fora do contêiner |
+| `SERVER_PORT` | `8080` | Porta HTTP da API |
 | `PROVIDER_BASE_URL` | `http://localhost:8089` | URL base do provedor de ativação |
-| `PROVIDER_API_KEY` | `local-dev-key` | Credencial do provedor (em produção, injetada a partir de um cofre de segredos) |
-| `PROVIDER_CONNECT_TIMEOUT` | `2s` | Timeout de conexão com o provedor |
-| `PROVIDER_READ_TIMEOUT` | `5s` | Timeout de leitura da resposta do provedor |
+| `PROVIDER_API_KEY` | `local-dev-key` | Credencial do provedor (em produção, vinda de um cofre de segredos) |
+| `PROVIDER_CONNECT_TIMEOUT` / `PROVIDER_READ_TIMEOUT` | `2s` / `5s` | Timeouts da chamada ao provedor |
 | `WORKER_ENABLED` | `true` | Liga o envio assíncrono e a reconciliação |
-| `WORKER_POLL_INTERVAL` | `2s` | Intervalo entre buscas de solicitações pendentes |
-| `WORKER_RECONCILE_INTERVAL` | `1m` | Intervalo da reconciliação de solicitações presas em `PROCESSING` |
+| `WORKER_POLL_INTERVAL` / `WORKER_RECONCILE_INTERVAL` | `2s` / `1m` | Frequência do envio e da reconciliação |
 | `OAUTH_ISSUER` | `http://localhost:8180/realms/activation` | Emissor esperado no claim `iss` |
 | `OAUTH_JWK_SET_URI` | `.../realms/activation/protocol/openid-connect/certs` | Onde buscar as chaves públicas (JWKS) |
 | `OAUTH_AUDIENCE` | `activation-service` | Valor exigido no claim `aud` |
+| `SHUTDOWN_TIMEOUT` | `30s` | Espera máxima no desligamento gracioso |
 
 ## API
 
