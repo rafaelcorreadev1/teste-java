@@ -10,6 +10,9 @@ target/
 .settings/
 .factorypath
 
+### Variáveis locais (o modelo versionado é o .env.example) ###
+.env
+
 ### Material de estudo pessoal (não faz parte da entrega) ###
 estudo/
 

@@ -3,17 +3,25 @@ services:
     build: .
     image: activation-service:local
     ports:
-      - "8080:8080"
+      - "${SERVER_PORT:-8080}:8080"
+    # Valores vêm do .env (opcional; ver .env.example). Os endereços entre contêineres são fixos.
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/activation
-      DB_USER: activation
-      DB_PASSWORD: activation
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-activation}
+      DB_USER: ${DB_USER:-activation}
+      DB_PASSWORD: ${DB_PASSWORD:-activation}
       PROVIDER_BASE_URL: http://provider-mock:8080
-      PROVIDER_API_KEY: local-dev-key
+      PROVIDER_API_KEY: ${PROVIDER_API_KEY:-local-dev-key}
+      PROVIDER_CONNECT_TIMEOUT: ${PROVIDER_CONNECT_TIMEOUT:-2s}
+      PROVIDER_READ_TIMEOUT: ${PROVIDER_READ_TIMEOUT:-5s}
+      WORKER_ENABLED: ${WORKER_ENABLED:-true}
+      WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-2s}
+      WORKER_RECONCILE_INTERVAL: ${WORKER_RECONCILE_INTERVAL:-1m}
       # Tokens são pedidos pelo host (localhost:8180), então esse é o emissor;
       # já as chaves a aplicação busca pela rede interna do compose.
-      OAUTH_ISSUER: http://localhost:8180/realms/activation
+      OAUTH_ISSUER: ${OAUTH_ISSUER:-http://localhost:8180/realms/activation}
       OAUTH_JWK_SET_URI: http://keycloak:8080/realms/activation/protocol/openid-connect/certs
+      OAUTH_AUDIENCE: ${OAUTH_AUDIENCE:-activation-service}
+      SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-30s}
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,15 +38,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: activation
-      POSTGRES_USER: activation
-      POSTGRES_PASSWORD: activation
+      POSTGRES_DB: ${DB_NAME:-activation}
+      POSTGRES_USER: ${DB_USER:-activation}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-activation}
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U activation -d activation"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
