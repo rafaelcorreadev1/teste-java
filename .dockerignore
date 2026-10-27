@@ -1,0 +1,12 @@
+target/
+.git/
+.github/
+.idea/
+.vscode/
+.claude/
+estudo/
+docs/
+openspec/
+docker/
+*.md
+*.html

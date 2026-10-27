@@ -1,4 +1,32 @@
 services:
+  app:
+    build: .
+    image: activation-service:local
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/activation
+      DB_USER: activation
+      DB_PASSWORD: activation
+      PROVIDER_BASE_URL: http://provider-mock:8080
+      PROVIDER_API_KEY: local-dev-key
+      # Tokens são pedidos pelo host (localhost:8180), então esse é o emissor;
+      # já as chaves a aplicação busca pela rede interna do compose.
+      OAUTH_ISSUER: http://localhost:8180/realms/activation
+      OAUTH_JWK_SET_URI: http://keycloak:8080/realms/activation/protocol/openid-connect/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      provider-mock:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    stop_grace_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
   postgres:
     image: postgres:16-alpine
     environment:
