@@ -14,7 +14,7 @@ Um ADR **Aceito** não é editado. Para mudar a decisão, crie um ADR novo que o
 | [0007](0007-politica-de-retentativa-e-idempotencia-provedor.md) | Política de retentativa e chave de idempotência no provedor | Aceito | `add-provider-activation` |
 | [0008](0008-seguranca-oauth2-resource-server.md) | OAuth 2.0 Client Credentials + JWT, escopos e isolamento por cliente | Aceito | `add-api-security` |
 | [0009](0009-listagem-paginada-e-indices.md) | Listagem paginada e índices | Aceito | `add-request-listing` |
-| [0010](0010-observabilidade-e-empacotamento.md) | Observabilidade e empacotamento em contêiner | Proposto | `add-operational-readiness` |
+| [0010](0010-observabilidade-e-empacotamento.md) | Observabilidade e empacotamento em contêiner | Aceito | `add-operational-readiness` |
 
 ## Modelo
 

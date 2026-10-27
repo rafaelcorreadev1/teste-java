@@ -28,7 +28,7 @@ O `CorrelationIdFilter` já existe desde `add-activation-requests`, alimentando 
 - O provedor externo **não** entra no readiness. Se entrasse, o provedor fora do ar tiraria todas as instâncias do balanceamento, e a API, que nem depende dele de forma síncrona, ficaria inteira indisponível.
 
 ### Métricas
-- `Timer` `activation.provider.call` (tags `outcome` e `http_status`) com histograma para p95/p99.
+- `Timer` `activation.provider.call` (tags `outcome` e `detail`, este com o status ou o motivo da falha) com histograma para p95/p99, registrado no próprio `ProviderClient`.
 - `MultiGauge` `activation.requests` por `status`, atualizado por uma consulta `group by status` agendada a cada 30 s, em vez de ser calculado a cada *scrape*, para não pesar no banco.
 - Hikari (`hikaricp.connections.active` / `pending`) e `http.server.requests` já vêm automáticos.
 
@@ -57,13 +57,13 @@ COPY --from=build /app/extracted/application/ ./
 USER app
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8080
-HEALTHCHECK --interval=15s --timeout=3s CMD wget -qO- localhost:8080/actuator/health/liveness || exit 1
+HEALTHCHECK --interval=15s --timeout=3s --start-period=40s CMD curl -fs http://localhost:8080/actuator/health/liveness || exit 1
 ENTRYPOINT ["java","org.springframework.boot.loader.launch.JarLauncher"]
 ```
 
 - As camadas ficam ordenadas do que menos muda (dependências) para o que mais muda (código), para aproveitar o cache.
 - Os testes não rodam no build da imagem porque já rodaram na CI. O Testcontainers dentro do `docker build` exigiria Docker-in-Docker.
-- O `HEALTHCHECK` precisa de `wget`/`curl` na imagem. Se a imagem base não tiver, troca-se por `curl` instalado na camada ou remove-se o comando, deixando a probe para o orquestrador. Isso será conferido na implementação.
+- O `HEALTHCHECK` usa `curl`, que a imagem `eclipse-temurin:21-jre` já traz (conferido na implementação). O runtime dessa imagem, porém, não inclui todos os módulos do JDK: `RandomGenerator.getDefault()` (módulo `jdk.random`) falhou na subida e foi trocado por `java.util.Random`.
 - `server.shutdown=graceful` e `spring.lifecycle.timeout-per-shutdown-phase=30s`. O scheduler espera o lote corrente com `spring.task.scheduling.shutdown.await-termination=true`.
 - No compose, a app usa `depends_on: postgres: condition: service_healthy` e variáveis de ambiente. A segurança local usa o perfil `local`, com um emissor de teste documentado no README.
 

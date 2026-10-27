@@ -2,14 +2,29 @@
 
 Serviço de ativação de produtos de clientes: registra solicitações, permite consultar o status e realiza a ativação em um provedor externo.
 
-**Stack:** Java 21 · Spring Boot 3.5 · Spring MVC · Spring Data JPA/Hibernate · PostgreSQL 16 · Flyway · Maven · JUnit 5 · Testcontainers · WireMock · Docker.
+**Stack:** Java 21 · Spring Boot 3.5 · Spring MVC · Spring Data JPA/Hibernate · Spring Security (OAuth 2.0 Resource Server) · PostgreSQL 16 · Flyway · Maven · JUnit 5 · Mockito · Testcontainers · WireMock · ArchUnit · Micrometer/Prometheus · Docker.
+
+## Sumário
+
+- [Como executar](#como-executar)
+- [API](#api)
+- [Decisões técnicas](#decisões-técnicas): duplicidade, segurança, listagem, status, integração
+- [Estratégia de testes](#estratégia-de-testes)
+- [Cenário de análise (item 10)](#cenário-de-análise-item-10)
+- [Produção](#produção)
+- [Microsserviços e cloud](#microsserviços-e-cloud)
+- [Pontos pendentes](#pontos-pendentes)
+- [Melhorias futuras](#melhorias-futuras)
+- [Uso de IA](#uso-de-ia)
+
+Decisões de arquitetura: [`docs/adr/`](docs/adr/README.md). Especificações (requisitos e cenários): [`openspec/specs/`](openspec/specs/).
 
 ## Como executar
 
 ### Pré-requisitos
 
 - JDK 21
-- Docker (para o banco local e para os testes de integração com Testcontainers)
+- Docker (para o ambiente local e para os testes de integração com Testcontainers)
 
 ### Testes
 
@@ -18,13 +33,21 @@ Serviço de ativação de produtos de clientes: registra solicitações, permite
 ```
 
 Um único comando compila e roda:
-- os testes unitários (`*Test`, Surefire);
-- os testes de integração (`*IT`, Failsafe) contra um PostgreSQL 16 real, que o Testcontainers sobe automaticamente.
+- os testes unitários e de arquitetura (`*Test`, Surefire);
+- os testes de integração (`*IT`, Failsafe) contra um PostgreSQL 16 real e um WireMock, que sobem automaticamente.
 
-### Aplicação local
+### Tudo em contêineres (um comando)
 
 ```bash
-docker compose up -d --wait   # Postgres (5432) + mock do provedor (8089) + Keycloak de desenvolvimento (8180)
+docker compose up -d --build --wait   # app (8080) + Postgres (5432) + mock do provedor (8089) + Keycloak (8180)
+node scripts/smoke-test.mjs           # 40 verificações HTTP de ponta a ponta contra o ambiente
+docker compose down
+```
+
+### Aplicação fora do contêiner (desenvolvimento)
+
+```bash
+docker compose up -d --wait postgres provider-mock keycloak
 ./mvnw spring-boot:run
 curl localhost:8080/actuator/health
 ```
@@ -253,10 +276,123 @@ Backoff: `min(5 min, 2 s × 2^(n−1))` multiplicado por um fator aleatório ent
 
 **Premissa.** O provedor precisa respeitar o `Idempotency-Key`. Sem isso, nenhuma estratégia evita 100% de ativação duplicada após um timeout, porque o resultado da primeira chamada é desconhecido.
 
+## Estratégia de testes
+
+O critério foi dar confiança para alterar o sistema, e não perseguir cobertura. Cada nível testa o que só ele consegue provar:
+
+| Nível | Ferramentas | O que prova | Exemplos |
+|---|---|---|---|
+| **Unitário, sem Spring** | JUnit 5, AssertJ, Mockito | Regras puras, rápidas e determinísticas | Matriz completa de transições de status; backoff com jitter fixo e real; classificação de 19 retornos do provedor; `Retry-After` em segundos e data HTTP; ramos do serviço de criação |
+| **Cliente HTTP** | WireMock | Contrato com o provedor sem rede real | Headers (`Idempotency-Key`, `X-Correlation-Id`, `X-Api-Key`), 400/500/503, timeout de leitura, conexão recusada; mappings do compose |
+| **Fatia web** | `@WebMvcTest`, `spring-security-test` | Contrato HTTP isolado do banco | 201 + `Location`, 200 no retry, cada `type` de erro, `traceId`, 401/403/413, validação de paginação |
+| **Integração** | `@SpringBootTest` + Testcontainers (Postgres 16) + WireMock | O que depende do banco **real** | Constraint única sob 10 threads; `FOR UPDATE SKIP LOCKED` (o teste falha se a cláusula for removida); lock otimista; worker ponta a ponta; tokens reais assinados; `EXPLAIN` usando os índices; métricas e readiness |
+| **Arquitetura** | ArchUnit | Regras de dependência que o compilador não garante | Domínio sem Spring; controller sem repositório; endpoints nunca devolvem entidades |
+| **Fumaça** | `scripts/smoke-test.mjs` + docker compose | O artefato real (imagem) funcionando com as dependências reais | 40 verificações HTTP com tokens do Keycloak |
+
+Decisões que valem destacar:
+- **Postgres real, sem H2**: os pontos críticos do desafio (unicidade concorrente, `SKIP LOCKED`, `timestamptz`) só se comportam de verdade no banco de produção.
+- **Um único contexto Spring para todos os `*IT`**, com um Postgres e um WireMock compartilhados (registrados via `DynamicPropertyRegistrar`, que não entra na chave do cache de contexto). A suíte de integração roda em cerca de 20 s.
+- **Sem `sleep` para esperar backoff**: o worker agendado fica desligado nos testes, que o acionam diretamente, e "avançam o tempo" movendo `next_attempt_at` para o passado.
+- **O teste de fumaça encontrou um bug que nenhum outro teste pegaria**: a imagem JRE enxuta não tem o módulo `jdk.random`, e `RandomGenerator.getDefault()` derrubava a aplicação na subida. Por isso vale testar o artefato, e não só o código.
+
+## Cenário de análise (item 10)
+
+> API 300 ms → 2,5 s · CPU 45% · memória 60% · algumas consultas 50 ms → 1,2 s · serviço externo 400 ms → 3 s
+
+**Leitura inicial.** CPU e memória estão normais enquanto a latência subiu oito vezes. As threads estão **esperando** (I/O, pool de conexões, locks), não trabalhando. Não é falta de capacidade de processamento, e escalar instâncias às cegas pode até piorar (mais conexões disputando o mesmo banco).
+
+**O que eu investigaria primeiro.** Quando começou e o que mudou naquele momento: deploy, volume, mudança no provedor, crescimento de alguma tabela. Depois, separaria as três camadas.
+
+**Como identificar se o problema está na aplicação, no banco ou na integração.**
+
+| Camada | Sinal que a isola |
+|---|---|
+| Integração | `activation_provider_call_seconds` (p95/p99 por `outcome`) e a taxa de `transient_failure`. Se o provedor subiu de 400 ms para 3 s, aparece aqui primeiro. |
+| Banco | `pg_stat_statements` (tempo **de execução** no servidor) × tempo da consulta medido na aplicação. Se o banco diz 50 ms e a aplicação mede 1,2 s, o tempo está **antes** da consulta, esperando conexão. |
+| Pool | `hikaricp_connections_pending`, `hikaricp_connections_acquire_seconds`, `hikaricp_connections_active` no máximo. |
+| Aplicação | `http_server_requests_seconds` por endpoint; *thread dump* (threads paradas em `HikariPool.getConnection` ou em leitura de socket). |
+| Requisição individual | O `X-Correlation-Id` liga o log da requisição, do worker e a chamada ao provedor. Seguir uma requisição lenta mostra onde o tempo foi gasto. |
+
+**Hipótese de causa comum.** Numa implementação que chama o provedor **dentro da transação** (ou de forma síncrona segurando a conexão), cada requisição prende uma conexão do pool por cerca de 3 s quando o provedor fica lento. O pool (10 conexões por padrão) esgota, e todas as outras requisições, inclusive GETs simples, esperam na fila do Hikari. Na visão da aplicação isso aparece como "consulta lenta" (50 ms → 1,2 s), embora o banco esteja ocioso, e a API inteira sobe para 2,5 s. Uma única causa raiz (provedor lento combinado com conexão presa durante I/O remoto) explicaria os três sintomas, com CPU e memória normais.
+
+**Como confirmar:** `hikaricp_connections_pending > 0` e `acquire` alto no mesmo período em que o provedor degradou; `pg_stat_activity` mostrando conexões `idle in transaction`; `pg_stat_statements` com tempo de execução baixo; *thread dump* com threads do Tomcat esperando conexão. A hipótese alternativa, investigada em paralelo, é crescimento da tabela sem índice. Nesse caso, o próprio `pg_stat_statements` mostra execução alta, e o `EXPLAIN ANALYZE` mostra *Seq Scan*.
+
+**Melhorias.**
+- Tirar a chamada remota da requisição e de qualquer transação. Este serviço já faz isso: o `POST` só grava, e o worker chama o provedor sem transação aberta.
+- Timeouts curtos e explícitos (2 s de conexão, 5 s de leitura), para que um provedor lento não segure recursos indefinidamente.
+- *Bulkhead* (pool próprio, limitado, para as chamadas ao provedor) e circuit breaker, para isolar a lentidão dele.
+- Índices guiados pelas consultas e paginação (ver tabela de índices).
+- Alertas em p95/p99 e em `connections.pending`, e não na média, que esconde a cauda.
+
+**Como validar a correção depois de publicada.**
+- Comparar p50/p95/p99 da API, `hikaricp_connections_pending` e o tempo de execução no banco com a linha de base, **na mesma janela de tráfego** do dia anterior.
+- Publicar por canário ou rollout gradual, comparando a versão nova com a antiga lado a lado antes de completar.
+- Reproduzir a causa em ambiente de teste: o mock do compose tem o cenário `SLOW`, que simula o provedor lento. Com ele, dá para provar que a API continua respondendo rápido enquanto o provedor demora.
+
+## Produção
+
+**Artefato.** O `Dockerfile` gera uma imagem multi-stage:
+- build com Maven, com cache de dependências;
+- runtime `eclipse-temurin:21-jre` com as camadas do Spring Boot, ordenadas para reaproveitar cache;
+- usuário não-root (uid 10001);
+- `-XX:MaxRAMPercentage=75` (a JVM respeita o limite de memória do contêiner) e `-XX:+ExitOnOutOfMemoryError` (o orquestrador reinicia em vez de manter um processo degradado);
+- perfil `prod` com logs JSON (ECS);
+- `HEALTHCHECK` no liveness.
+
+A imagem é construída pela CI **depois** dos testes passarem, e não roda os testes no `docker build`, porque o Testcontainers exigiria Docker-in-Docker.
+
+**Execução.** Em produção eu rodaria em um orquestrador (Kubernetes, ECS ou Cloud Run):
+- **mínimo de 2 réplicas** atrás de um balanceador. Várias instâncias são seguras: a unicidade está no banco e o worker usa `SKIP LOCKED`;
+- **probes**: `liveness` em `/actuator/health/liveness` (reinicia se travar) e `readiness` em `/actuator/health/readiness` (tira do balanceador se o banco cair). O provedor externo fica **fora** do readiness: se ele cair, as instâncias continuam aceitando solicitações, que serão enviadas depois;
+- **desligamento gracioso**: `server.shutdown=graceful` com 30 s para concluir requisições e o lote em andamento (verificado com `docker stop` no meio de uma chamada lenta ao provedor). O `terminationGracePeriodSeconds` do orquestrador precisa ser maior que isso;
+- **configuração por variáveis de ambiente** (tabela em [Configuração](#configuração)); **segredos** (`DB_PASSWORD`, `PROVIDER_API_KEY`) vindos de um cofre, nunca da imagem;
+- **banco gerenciado** (RDS/Cloud SQL/Azure Database for PostgreSQL), com backups e réplica. As migrations do Flyway rodam na subida; com muitas réplicas, eu as moveria para um *job* de pré-deploy, para não disputarem o lock do Flyway;
+- **métricas** em `/actuator/prometheus`, que exige token: o Prometheus suporta `oauth2` com client credentials no `scrape_config`. **Logs JSON** com `traceId` e `requestId`, coletados pelo agente da plataforma;
+- **API Gateway** na frente, com TLS, rate limit por `client_id` e limites de tamanho.
+
+## Microsserviços e cloud
+
+- **Várias instâncias ao mesmo tempo.** A regra de duplicidade não depende de memória (constraint única no banco), e o envio ao provedor é dividido entre instâncias por `FOR UPDATE SKIP LOCKED`. A reconciliação é segura para rodar em todas as réplicas (cada linha é liberada numa transação própria, com `@Version`). Escalar horizontalmente não exige *leader election* nem lock distribuído.
+- **Configurações e segredos.** Variáveis de ambiente para configuração; segredos no gerenciador da nuvem (AWS Secrets Manager, Azure Key Vault, GCP Secret Manager), injetados no pod via integração da plataforma (External Secrets Operator, CSI driver) ou lidos pelo Spring Cloud AWS/Azure/Vault, o que permite rotação sem rebuild.
+- **Avisar outros serviços de que a ativação foi concluída.** Publicar um evento `ActivationCompleted` / `ActivationFailed` num tópico (Kafka, SNS/SQS, Pub/Sub). Para não perder eventos, eu usaria o mesmo princípio de outbox já aplicado aqui: gravar o evento numa tabela `outbox_event` na **mesma transação** que muda o status para `COMPLETED`, e um publicador (ou Debezium/CDC) o envia ao broker com entrega *at-least-once*. Os consumidores ficam idempotentes pelo id do evento.
+- **Pipeline de CI/CD.**
+  1. PR: `./mvnw verify` (unitários, ArchUnit e integração com Testcontainers), já no GitHub Actions.
+  2. Merge na `main`: build da imagem, scan de vulnerabilidades (Trivy/Grype), assinatura (cosign) e push para o registry com a tag do commit.
+  3. Deploy automático em homologação, com o teste de fumaça rodando contra o ambiente.
+  4. Promoção para produção com canário, observando p95, taxa de erro e `activation_provider_call` antes de completar o rollout. Rollback é voltar a imagem anterior; as migrations são sempre aditivas para permitir isso.
+- **Tracing distribuído.** Hoje a correlação é feita pelo `X-Correlation-Id`. Com mais serviços, eu adotaria OpenTelemetry (Micrometer Tracing + exporter OTLP), propagando o `traceparent` W3C até o provedor e o broker.
+
 ## Pontos pendentes
 
+O que não foi implementado e como eu faria:
+
+- **Processamento sequencial dentro do lote**: o worker envia as solicitações do lote uma a uma. O teste de fumaça mostrou que uma chamada lenta (timeout de 5 s) atrasa as outras do mesmo lote. Como o paralelismo hoje vem de múltiplas instâncias, isso é aceitável, mas o próximo passo seria processar o lote com *virtual threads* e um limite de concorrência (bulkhead).
 - **Log de duplicidade em nível ERROR**: no retry legítimo, o `SqlExceptionHelper` do Hibernate registra `duplicate key` como ERROR antes de o serviço tratar a violação. Em produção, isso polui o log e pode disparar alertas. As opções são rebaixar esse logger específico ou trocar o insert por `INSERT ... ON CONFLICT DO NOTHING RETURNING` (ADR 0003).
 - **Reprocessamento manual de `FAILED`**: não há endpoint administrativo para reenfileirar uma solicitação `FAILED` (por exemplo, depois de corrigir a credencial que causou um 401). Hoje, isso exigiria um `UPDATE` direto no banco.
 - **Circuit breaker no cliente do provedor**: descrito na seção de integração, mas não implementado.
 - **Rate limit por cliente**: delegado ao API Gateway (seção Segurança), não implementado na aplicação.
 - **Autenticação do serviço perante o provedor**: hoje é uma API key estática (`X-Api-Key`). Se o provedor suportar, o ideal é o mesmo modelo Client Credentials, ou mTLS.
+- **Tracing distribuído (OpenTelemetry)**: descrito em [Microsserviços e cloud](#microsserviços-e-cloud); a correlação atual é feita por `X-Correlation-Id`.
+
+## Melhorias futuras
+
+Se a aplicação fosse evoluir para produção:
+
+1. **Spring Boot 4.x**: o suporte open source da linha 3.5 terminou em junho/2026. A migração passaria por OpenRewrite (`UpgradeSpringBoot_4_0`), Jackson 3 e ajuste dos pacotes de teste (ADR 0001).
+2. **Eventos de domínio** (`ActivationCompleted`/`ActivationFailed`) via outbox e broker, para os demais serviços reagirem sem consultar esta API por polling.
+3. **Webhook ou notificação ao sistema de origem**, como alternativa ao polling do `GET`.
+4. **Endpoint administrativo de reprocessamento**, com escopo próprio (`activation:admin`) e trilha de auditoria.
+5. **Circuit breaker e bulkhead** no cliente do provedor, com processamento paralelo do lote.
+6. **Paginação por cursor** (*keyset*) na listagem, para tabelas grandes.
+7. **Particionamento ou arquivamento** de solicitações terminais antigas, mantendo os índices parciais do worker pequenos.
+8. **OpenTelemetry**, dashboards (Grafana) e alertas por SLO (p99 da API, idade da solicitação `PENDING` mais antiga, taxa de `MAX_ATTEMPTS_EXCEEDED`).
+9. **Testes de contrato** com o provedor (Pact ou Spring Cloud Contract), para detectar quebras no contrato antes da produção.
+
+## Uso de IA
+
+Usei o **Claude Code** (Anthropic) como assistente durante todo o desenvolvimento:
+
+- **Planejamento**: análise do enunciado (obrigatório × diferencial), redação das especificações no formato [OpenSpec](openspec/) e dos [ADRs](docs/adr/), com as decisões discutidas antes da implementação (por exemplo, a escolha do Spring Boot 3.5.16 em vez da 4.1, registrada no ADR 0001).
+- **Implementação**: geração do código e dos testes change a change, seguindo as tarefas do OpenSpec, com commits pequenos por intenção. Os comandos do OpenSpec usados nesse fluxo estão em `.claude/`.
+- **Verificação**: execução da suíte, do teste de fumaça contra o ambiente em contêineres e conferência dos requisitos do enunciado.
+
