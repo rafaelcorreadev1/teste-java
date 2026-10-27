@@ -1,6 +1,6 @@
 # 0003. Garantir a unicidade de externalId por constraint no banco
 
-- Status: Proposto
+- Status: Aceito
 - Data: 2026-10-27
 - Change: `add-activation-requests`
 

@@ -1,6 +1,6 @@
 # 0005. Padronizar erros com Problem Details (RFC 9457)
 
-- Status: Proposto
+- Status: Aceito
 - Data: 2026-10-27
 - Change: `add-activation-requests`
 
@@ -17,6 +17,7 @@ A API é consumida por outros sistemas, que precisam de um formato de erro previ
 | JSON malformado | 400 | `malformed-request` |
 | Registro inexistente | 404 | `not-found` |
 | `externalId` repetido com conteúdo divergente | 409 | `duplicate-request` |
+| Conflito de versão (lock otimista) | 409 | `concurrent-update` |
 | Erro inesperado | 500 | `internal-error` (mensagem genérica; stack só no log) |
 
 - O `traceId` é o mesmo correlation id gravado no MDC e nos logs, então o suporte encontra o erro a partir da resposta.

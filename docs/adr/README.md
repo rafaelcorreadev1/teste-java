@@ -7,9 +7,9 @@ Um ADR **Aceito** não é editado. Para mudar a decisão, crie um ADR novo que o
 |---|---|---|---|
 | [0001](0001-stack-java21-spring-boot3.md) | Java 21 + Spring Boot 3.5.16 + Maven + PostgreSQL | Aceito | `bootstrap-project` |
 | [0002](0002-migracoes-versionadas-flyway.md) | Schema versionado com Flyway | Aceito | `bootstrap-project` |
-| [0003](0003-unicidade-externalid-constraint-banco.md) | Unicidade de `externalId` por constraint no banco + semântica de retry | Proposto | `add-activation-requests` |
-| [0004](0004-maquina-de-estados-no-dominio.md) | Transições de status no domínio + lock otimista | Proposto | `add-activation-requests` |
-| [0005](0005-erros-problem-details.md) | Erros em Problem Details (RFC 9457) com `traceId` | Proposto | `add-activation-requests` |
+| [0003](0003-unicidade-externalid-constraint-banco.md) | Unicidade de `externalId` por constraint no banco + semântica de retry | Aceito | `add-activation-requests` |
+| [0004](0004-maquina-de-estados-no-dominio.md) | Transições de status no domínio + lock otimista | Aceito | `add-activation-requests` |
+| [0005](0005-erros-problem-details.md) | Erros em Problem Details (RFC 9457) com `traceId` | Aceito | `add-activation-requests` |
 | [0006](0006-processamento-assincrono-tabela-como-outbox.md) | Processamento assíncrono usando a própria tabela como outbox | Proposto | `add-provider-activation` |
 | [0007](0007-politica-de-retentativa-e-idempotencia-provedor.md) | Política de retentativa e chave de idempotência no provedor | Proposto | `add-provider-activation` |
 | [0008](0008-seguranca-oauth2-resource-server.md) | OAuth 2.0 Client Credentials + JWT, escopos e isolamento por cliente | Proposto | `add-api-security` |

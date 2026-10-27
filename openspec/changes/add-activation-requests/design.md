@@ -55,7 +55,7 @@ Não há *fast path* (`existsByExternalId` antes do insert): a constraint resolv
 
 ### Máquina de estados (ver [ADR 0004](../../../docs/adr/0004-maquina-de-estados-no-dominio.md))
 - `enum ActivationStatus` com `allowedTargets()` e `canTransitionTo(target)`.
-- A entidade `ActivationRequest` tem construtor de fábrica `ActivationRequest.create(externalId, customerId, productCode, clock)`, os métodos `startProcessing`, `complete`, `fail` e `returnToPending`, e nenhum setter público. Cada transição valida a mudança e atualiza `updatedAt`. O `Clock` injetado deixa os testes determinísticos.
+- A entidade `ActivationRequest` tem construtor de fábrica `ActivationRequest.create(externalId, customerId, productCode, now)`, os métodos `startProcessing(now)`, `complete(now)`, `fail(now)` e `returnToPending(now)`, e nenhum setter público. Cada transição valida a mudança e atualiza `updatedAt`. A entidade recebe o `Instant` pronto, e o `Clock` fica no serviço: o domínio continua testável sem nenhum mock. O `Clock` é `tickMillis(UTC)`, porque com nanos o POST devolveria um instante diferente do que o `timestamptz` (microssegundos) devolve no GET.
 - `@Version Long version` dá o lock otimista.
 
 ### Erros (ver [ADR 0005](../../../docs/adr/0005-erros-problem-details.md))
