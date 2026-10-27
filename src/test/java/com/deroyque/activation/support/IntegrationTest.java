@@ -18,7 +18,8 @@ import org.springframework.context.annotation.Import;
 @Retention(RetentionPolicy.RUNTIME)
 @SpringBootTest(properties = {
         "activation.worker.enabled=false",
-        "activation.provider.read-timeout=1s"
+        "activation.provider.read-timeout=1s",
+        "activation.security.issuer=" + TestTokenIssuer.ISSUER
 })
 @AutoConfigureMockMvc
 @Import({TestcontainersConfiguration.class, ProviderMockConfiguration.class, DatabaseCleaner.class})

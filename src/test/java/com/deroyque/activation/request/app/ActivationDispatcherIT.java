@@ -167,7 +167,7 @@ class ActivationDispatcherIT {
     }
 
     private ActivationRequest create(String externalId) {
-        return service.create(new NewActivationRequest(externalId, "CUST-1", "INTERNET-500")).request();
+        return service.create(new NewActivationRequest("sys-a", externalId, "CUST-1", "INTERNET-500")).request();
     }
 
     private void simulateSendInProgress(ActivationRequest request) {

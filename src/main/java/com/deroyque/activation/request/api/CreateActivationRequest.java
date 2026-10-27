@@ -14,7 +14,7 @@ public record CreateActivationRequest(
     static final String IDENTIFIER = "[A-Za-z0-9_-]*";
     static final String IDENTIFIER_MESSAGE = "deve conter apenas letras, números, '_' ou '-'";
 
-    NewActivationRequest toCommand() {
-        return new NewActivationRequest(externalId, customerId, productCode);
+    NewActivationRequest toCommand(String clientId) {
+        return new NewActivationRequest(clientId, externalId, customerId, productCode);
     }
 }

@@ -45,7 +45,7 @@ class ActivationStateStoreIT {
         databaseCleaner.clean();
         Instant created = clock.instant().minusSeconds(60);
         IntStream.range(0, 20).forEach(i ->
-                repository.save(ActivationRequest.create("EXT-" + i, "CUST-1", "INTERNET-500", created)));
+                repository.save(ActivationRequest.create("sys-a", "EXT-" + i, "CUST-1", "INTERNET-500", created)));
     }
 
     @Test

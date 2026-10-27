@@ -39,7 +39,7 @@ class ConcurrentCreationIT {
 
     @RepeatedTest(3)
     void identicalConcurrentRequestsCreateExactlyOneRecord() throws Exception {
-        NewActivationRequest command = new NewActivationRequest("EXT-777", "CUST-1", "INTERNET-500");
+        NewActivationRequest command = new NewActivationRequest("sys-a", "EXT-777", "CUST-1", "INTERNET-500");
         CountDownLatch start = new CountDownLatch(1);
         Callable<CreateResult> task = () -> {
             start.await();

@@ -28,7 +28,7 @@ import com.deroyque.activation.request.infra.ActivationRequestRepository;
 class ActivationRequestServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-10-27T12:00:00Z");
-    private static final NewActivationRequest COMMAND = new NewActivationRequest("EXT-1", "CUST-1", "INTERNET-500");
+    private static final NewActivationRequest COMMAND = new NewActivationRequest("sys-a", "EXT-1", "CUST-1", "INTERNET-500");
 
     @Mock
     ActivationRequestWriter writer;
@@ -56,9 +56,9 @@ class ActivationRequestServiceTest {
 
     @Test
     void retryWithSameContentReturnsExisting() {
-        ActivationRequest existing = ActivationRequest.create("EXT-1", "CUST-1", "INTERNET-500", NOW);
+        ActivationRequest existing = ActivationRequest.create("sys-a", "EXT-1", "CUST-1", "INTERNET-500", NOW);
         given(writer.insert(any())).willThrow(violationOf(ActivationRequestRepository.EXTERNAL_ID_CONSTRAINT));
-        given(repository.findByExternalId("EXT-1")).willReturn(Optional.of(existing));
+        given(repository.findByClientIdAndExternalId("sys-a", "EXT-1")).willReturn(Optional.of(existing));
 
         CreateResult result = service.create(COMMAND);
 
@@ -67,9 +67,9 @@ class ActivationRequestServiceTest {
 
     @Test
     void sameExternalIdWithDifferentContentIsRejected() {
-        ActivationRequest existing = ActivationRequest.create("EXT-1", "CUST-1", "INTERNET-1000", NOW);
+        ActivationRequest existing = ActivationRequest.create("sys-a", "EXT-1", "CUST-1", "INTERNET-1000", NOW);
         given(writer.insert(any())).willThrow(violationOf(ActivationRequestRepository.EXTERNAL_ID_CONSTRAINT));
-        given(repository.findByExternalId("EXT-1")).willReturn(Optional.of(existing));
+        given(repository.findByClientIdAndExternalId("sys-a", "EXT-1")).willReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> service.create(COMMAND)).isInstanceOf(DuplicateRequestException.class);
     }
@@ -85,9 +85,9 @@ class ActivationRequestServiceTest {
     @Test
     void findByIdThrowsWhenMissing() {
         UUID id = UUID.randomUUID();
-        given(repository.findById(id)).willReturn(Optional.empty());
+        given(repository.findByIdAndClientId(id, "sys-a")).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.findById(id)).isInstanceOf(ActivationRequestNotFoundException.class);
+        assertThatThrownBy(() -> service.findById(id, "sys-a")).isInstanceOf(ActivationRequestNotFoundException.class);
     }
 
     private static DataIntegrityViolationException violationOf(String constraint) {

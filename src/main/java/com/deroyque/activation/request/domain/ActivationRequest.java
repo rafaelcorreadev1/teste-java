@@ -19,6 +19,9 @@ public class ActivationRequest {
     @Id
     private UUID id;
 
+    @Column(name = "client_id", nullable = false, updatable = false)
+    private String clientId;
+
     @Column(name = "external_id", nullable = false, updatable = false)
     private String externalId;
 
@@ -56,8 +59,9 @@ public class ActivationRequest {
     protected ActivationRequest() {
     }
 
-    private ActivationRequest(String externalId, String customerId, String productCode, Instant now) {
+    private ActivationRequest(String clientId, String externalId, String customerId, String productCode, Instant now) {
         this.id = UUID.randomUUID();
+        this.clientId = Objects.requireNonNull(clientId);
         this.externalId = Objects.requireNonNull(externalId);
         this.customerId = Objects.requireNonNull(customerId);
         this.productCode = Objects.requireNonNull(productCode);
@@ -67,8 +71,9 @@ public class ActivationRequest {
         this.updatedAt = now;
     }
 
-    public static ActivationRequest create(String externalId, String customerId, String productCode, Instant now) {
-        return new ActivationRequest(externalId, customerId, productCode, now);
+    public static ActivationRequest create(String clientId, String externalId, String customerId, String productCode,
+            Instant now) {
+        return new ActivationRequest(clientId, externalId, customerId, productCode, now);
     }
 
     /** A tentativa é contada aqui, e não no resultado, para que envios interrompidos por queda também a consumam. */
@@ -109,6 +114,10 @@ public class ActivationRequest {
 
     public UUID getId() {
         return id;
+    }
+
+    public String getClientId() {
+        return clientId;
     }
 
     public String getExternalId() {

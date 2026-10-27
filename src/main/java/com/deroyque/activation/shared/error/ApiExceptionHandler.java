@@ -1,12 +1,13 @@
 package com.deroyque.activation.shared.error;
 
-import java.net.URI;
+import static com.deroyque.activation.shared.error.ProblemTypes.problem;
+import static com.deroyque.activation.shared.error.ProblemTypes.withTraceId;
+
 import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
@@ -24,14 +25,12 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 
 import com.deroyque.activation.request.app.ActivationRequestNotFoundException;
 import com.deroyque.activation.request.app.DuplicateRequestException;
-import com.deroyque.activation.shared.web.CorrelationIdFilter;
+import com.deroyque.activation.shared.web.PayloadTooLargeException;
 
 @RestControllerAdvice
 class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
-
-    static final String PROBLEM_BASE_URI = "https://api.deroyque.com/problems/";
 
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
@@ -48,6 +47,10 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        if (PayloadTooLargeException.isCauseOf(ex)) {
+            ProblemDetail tooLarge = PayloadTooLargeException.problem();
+            return handleExceptionInternal(ex, tooLarge, headers, HttpStatus.PAYLOAD_TOO_LARGE, request);
+        }
         ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "malformed-request", "Requisição malformada",
                 "O corpo da requisição não é um JSON válido ou contém tipos incompatíveis.");
         return handleExceptionInternal(ex, problem, headers, status, request);
@@ -96,17 +99,5 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             withTraceId(problem);
         }
         return super.handleExceptionInternal(ex, body, headers, statusCode, request);
-    }
-
-    private static ProblemDetail problem(HttpStatus status, String slug, String title, String detail) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
-        problem.setType(URI.create(PROBLEM_BASE_URI + slug));
-        problem.setTitle(title);
-        return withTraceId(problem);
-    }
-
-    private static ProblemDetail withTraceId(ProblemDetail problem) {
-        problem.setProperty("traceId", MDC.get(CorrelationIdFilter.MDC_KEY));
-        return problem;
     }
 }

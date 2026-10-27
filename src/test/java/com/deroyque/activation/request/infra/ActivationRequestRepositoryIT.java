@@ -35,9 +35,9 @@ class ActivationRequestRepositoryIT {
 
     @Test
     void duplicateExternalIdViolatesNamedConstraint() {
-        repository.saveAndFlush(ActivationRequest.create("EXT-1", "CUST-1", "INTERNET-500", NOW));
+        repository.saveAndFlush(ActivationRequest.create("sys-a", "EXT-1", "CUST-1", "INTERNET-500", NOW));
 
-        assertThatThrownBy(() -> repository.saveAndFlush(ActivationRequest.create("EXT-1", "CUST-2", "TV-HD", NOW)))
+        assertThatThrownBy(() -> repository.saveAndFlush(ActivationRequest.create("sys-a", "EXT-1", "CUST-2", "TV-HD", NOW)))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .satisfies(error -> assertThat(
                         ConstraintViolations.isViolationOf(error, ActivationRequestRepository.EXTERNAL_ID_CONSTRAINT))
@@ -46,17 +46,25 @@ class ActivationRequestRepositoryIT {
     }
 
     @Test
-    void findsByExternalId() {
-        ActivationRequest saved = repository.saveAndFlush(ActivationRequest.create("EXT-1", "CUST-1", "INTERNET-500", NOW));
+    void sameExternalIdIsAllowedForDifferentClients() {
+        repository.saveAndFlush(ActivationRequest.create("sys-a", "EXT-1", "CUST-1", "INTERNET-500", NOW));
+        repository.saveAndFlush(ActivationRequest.create("sys-b", "EXT-1", "CUST-9", "TV-HD", NOW));
 
-        assertThat(repository.findByExternalId("EXT-1")).get()
+        assertThat(repository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void findsByExternalId() {
+        ActivationRequest saved = repository.saveAndFlush(ActivationRequest.create("sys-a", "EXT-1", "CUST-1", "INTERNET-500", NOW));
+
+        assertThat(repository.findByClientIdAndExternalId("sys-a", "EXT-1")).get()
                 .extracting(ActivationRequest::getId).isEqualTo(saved.getId());
-        assertThat(repository.findByExternalId("EXT-404")).isEmpty();
+        assertThat(repository.findByClientIdAndExternalId("sys-a", "EXT-404")).isEmpty();
     }
 
     @Test
     void staleVersionCannotOverwriteConcurrentUpdate() {
-        ActivationRequest request = ActivationRequest.create("EXT-1", "CUST-1", "INTERNET-500", NOW);
+        ActivationRequest request = ActivationRequest.create("sys-a", "EXT-1", "CUST-1", "INTERNET-500", NOW);
         request.startProcessing(NOW);
         repository.saveAndFlush(request);
 

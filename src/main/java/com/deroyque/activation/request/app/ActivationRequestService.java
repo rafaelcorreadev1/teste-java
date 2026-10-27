@@ -28,7 +28,7 @@ public class ActivationRequestService {
      * fica marcada para rollback, e a leitura do registro vencedor precisa de uma transação nova.
      */
     public CreateResult create(NewActivationRequest command) {
-        ActivationRequest request = ActivationRequest.create(
+        ActivationRequest request = ActivationRequest.create(command.clientId(),
                 command.externalId(), command.customerId(), command.productCode(), clock.instant());
         try {
             return new CreateResult.Created(writer.insert(request));
@@ -40,12 +40,14 @@ public class ActivationRequestService {
         }
     }
 
-    public ActivationRequest findById(UUID id) {
-        return repository.findById(id).orElseThrow(() -> new ActivationRequestNotFoundException(id));
+    /** Solicitação de outro cliente responde como inexistente, para não revelar que o id existe. */
+    public ActivationRequest findById(UUID id, String clientId) {
+        return repository.findByIdAndClientId(id, clientId).orElseThrow(() -> new ActivationRequestNotFoundException(id));
     }
 
     private CreateResult resolveDuplicate(NewActivationRequest command, DataIntegrityViolationException cause) {
-        ActivationRequest existing = repository.findByExternalId(command.externalId()).orElseThrow(() -> cause);
+        ActivationRequest existing = repository.findByClientIdAndExternalId(command.clientId(), command.externalId())
+                .orElseThrow(() -> cause);
         if (!existing.hasSameContentAs(command.customerId(), command.productCode())) {
             throw new DuplicateRequestException(command.externalId());
         }

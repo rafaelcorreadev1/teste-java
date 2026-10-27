@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.deroyque.activation.request.infra.ActivationRequestRepository;
 import com.deroyque.activation.support.DatabaseCleaner;
 import com.deroyque.activation.support.IntegrationTest;
+import com.deroyque.activation.support.TestJwts;
 import com.jayway.jsonpath.JsonPath;
 
 @IntegrationTest
@@ -43,43 +44,43 @@ class ActivationRequestApiIT {
 
     @Test
     void fullLifecycleAgainstRealDatabase() throws Exception {
-        String created = mvc.perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON)
+        String created = mvc.perform(post("/api/v1/requests").with(TestJwts.fullAccess()).contentType(MediaType.APPLICATION_JSON)
                         .content(BODY.formatted("INTERNET-500")))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         String id = JsonPath.read(created, "$.id");
         String createdAt = JsonPath.read(created, "$.createdAt");
 
-        mvc.perform(get("/api/v1/requests/{id}", id))
+        mvc.perform(get("/api/v1/requests/{id}", id).with(TestJwts.fullAccess()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.createdAt").value(createdAt));
 
-        mvc.perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/requests").with(TestJwts.fullAccess()).contentType(MediaType.APPLICATION_JSON)
                         .content(BODY.formatted("INTERNET-500")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id));
 
-        mvc.perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/requests").with(TestJwts.fullAccess()).contentType(MediaType.APPLICATION_JSON)
                         .content(BODY.formatted("INTERNET-1000")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.type").value(endsWith("/problems/duplicate-request")));
 
-        mvc.perform(get("/api/v1/requests/{id}", id))
+        mvc.perform(get("/api/v1/requests/{id}", id).with(TestJwts.fullAccess()))
                 .andExpect(jsonPath("$.productCode").value("INTERNET-500"));
         assertThat(repository.count()).isEqualTo(1);
     }
 
     @Test
     void unknownIdReturns404() throws Exception {
-        mvc.perform(get("/api/v1/requests/{id}", UUID.randomUUID()))
+        mvc.perform(get("/api/v1/requests/{id}", UUID.randomUUID()).with(TestJwts.fullAccess()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.type").value(endsWith("/problems/not-found")));
     }
 
     @Test
     void invalidRequestCreatesNothing() throws Exception {
-        mvc.perform(post("/api/v1/requests").contentType(MediaType.APPLICATION_JSON).content("{\"externalId\":\"EXT-1\"}"))
+        mvc.perform(post("/api/v1/requests").with(TestJwts.fullAccess()).contentType(MediaType.APPLICATION_JSON).content("{\"externalId\":\"EXT-1\"}"))
                 .andExpect(status().isBadRequest());
 
         assertThat(repository.count()).isZero();

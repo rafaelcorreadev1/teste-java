@@ -6,6 +6,8 @@ import java.util.UUID;
 import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +18,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.deroyque.activation.request.app.ActivationRequestService;
 import com.deroyque.activation.request.app.CreateResult;
+import com.deroyque.activation.shared.security.ConsumerIdentity;
 
 @RestController
 @RequestMapping("/api/v1/requests")
@@ -28,8 +31,9 @@ class ActivationRequestController {
     }
 
     @PostMapping
-    ResponseEntity<ActivationRequestResponse> create(@Valid @RequestBody CreateActivationRequest body) {
-        return switch (service.create(body.toCommand())) {
+    ResponseEntity<ActivationRequestResponse> create(
+            @AuthenticationPrincipal Jwt token, @Valid @RequestBody CreateActivationRequest body) {
+        return switch (service.create(body.toCommand(ConsumerIdentity.of(token)))) {
             case CreateResult.Created created -> ResponseEntity
                     .created(locationOf(created.request().getId()))
                     .body(ActivationRequestResponse.from(created.request()));
@@ -39,8 +43,8 @@ class ActivationRequestController {
     }
 
     @GetMapping("/{id}")
-    ActivationRequestResponse findById(@PathVariable UUID id) {
-        return ActivationRequestResponse.from(service.findById(id));
+    ActivationRequestResponse findById(@AuthenticationPrincipal Jwt token, @PathVariable UUID id) {
+        return ActivationRequestResponse.from(service.findById(id, ConsumerIdentity.of(token)));
     }
 
     private static URI locationOf(UUID id) {

@@ -12,9 +12,11 @@ import com.deroyque.activation.request.domain.ActivationRequest;
 
 public interface ActivationRequestRepository extends JpaRepository<ActivationRequest, UUID> {
 
-    String EXTERNAL_ID_CONSTRAINT = "uk_activation_request_external_id";
+    String EXTERNAL_ID_CONSTRAINT = "uk_activation_request_client_external_id";
 
-    Optional<ActivationRequest> findByExternalId(String externalId);
+    Optional<ActivationRequest> findByIdAndClientId(UUID id, String clientId);
+
+    Optional<ActivationRequest> findByClientIdAndExternalId(String clientId, String externalId);
 
     /** SKIP LOCKED faz instâncias concorrentes pularem as linhas já reivindicadas em vez de esperar por elas. */
     @Query(value = """

@@ -13,7 +13,7 @@ class ActivationRequestTest {
     private static final Instant T1 = T0.plusSeconds(10);
     private static final Instant T2 = T0.plusSeconds(20);
 
-    private final ActivationRequest request = ActivationRequest.create("EXT-1", "CUST-1", "INTERNET-500", T0);
+    private final ActivationRequest request = ActivationRequest.create("sys-a", "EXT-1", "CUST-1", "INTERNET-500", T0);
 
     @Test
     void newRequestIsPendingAndDueImmediately() {
