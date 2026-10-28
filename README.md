@@ -28,6 +28,7 @@ Decisões de arquitetura: [`docs/adr/`](docs/adr/README.md). Especificações (r
 | Subir tudo e usar a API | **Docker** (Docker Desktop no Windows/macOS) com o Docker Compose v2, e `git` |
 | Rodar os testes ou a aplicação fora do contêiner | também o **JDK 21** (ex.: [Eclipse Temurin](https://adoptium.net/)). **Não** é preciso instalar o Maven: o projeto traz o wrapper (`mvnw`) |
 | Rodar o teste de fumaça (opcional) | **Node.js 18+** |
+| Seguir os exemplos em bash do passo 4 | [`jq`](https://jqlang.org/), para extrair o token do JSON. **Não** vem no Git Bash do Windows; o passo 4 mostra uma alternativa sem ele |
 
 As portas **8080** (API), **5432** (Postgres), **8089** (mock do provedor) e **8180** (Keycloak) precisam estar livres.
 
@@ -74,7 +75,7 @@ Toda chamada em `/api/**` exige um token OAuth 2.0. O Keycloak do compose já ve
 | `sistema-b` | `sistema-b-secret` | `activation:read activation:write` |
 | `sistema-leitura` | `sistema-leitura-secret` | `activation:read` |
 
-**Linux, macOS ou Git Bash** (usa [`jq`](https://jqlang.org/)):
+**Linux, macOS ou Git Bash** (usa [`jq`](https://jqlang.org/); sem ele, o token fica vazio e a API responde `401 Bearer token is malformed`):
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8180/realms/activation/protocol/openid-connect/token \
@@ -85,6 +86,14 @@ curl -i -X POST http://localhost:8080/api/v1/requests \
   -d '{"externalId":"EXT-1","customerId":"CUST-1","productCode":"INTERNET-500"}'
 
 curl -s "http://localhost:8080/api/v1/requests?status=COMPLETED" -H "Authorization: Bearer $TOKEN"
+```
+
+Sem `jq`, troque só a primeira linha (usa o Node.js para extrair o token):
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8180/realms/activation/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=sistema-a -d client_secret=sistema-a-secret \
+  | node -pe "JSON.parse(require('fs').readFileSync(0)).access_token")
 ```
 
 **Windows (PowerShell):**
@@ -129,11 +138,14 @@ Um único comando compila e roda:
 
 Exige o JDK 21 e o **Docker em execução**. Não precisa do `docker compose up`.
 
+Durante a execução aparecem linhas `ERROR ... duplicate key value violates unique constraint`. Elas são **esperadas**: vêm dos testes de duplicidade, que provocam a violação de propósito, e são registradas pelo Hibernate antes de a aplicação tratá-las. O que vale é o `BUILD SUCCESS` no fim.
+
 ### 7. Rodar a aplicação fora do contêiner (desenvolvimento)
 
-Útil para depurar na IDE. Sobe só as dependências e roda a aplicação com o Maven Wrapper:
+Útil para depurar na IDE. Sobe só as dependências e roda a aplicação com o Maven Wrapper. Se você fez o passo 3, pare antes o contêiner da aplicação, que ocupa a porta 8080 (senão: `Port 8080 was already in use`):
 
 ```bash
+docker compose stop app         # só se o passo 3 foi executado
 docker compose up -d --wait postgres provider-mock keycloak
 ./mvnw spring-boot:run           # Windows: .\mvnw.cmd spring-boot:run
 ```
